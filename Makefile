@@ -15,7 +15,7 @@
 ## use_R_S = 1: use Rate - State friction law
 ## useexo = 1: import a exodusII mesh (e.g., created with Trelis)
 
-ndims = 3
+ndims = 2
 opt = 2
 openmp = 1
 useadapt = 0
@@ -48,12 +48,12 @@ ifeq ($(useadapt), 1)
 	#LIB_MPIFORTRAN = -lmpi_mpifh # OpenMPI 1.10.2. Other possibilities: -lmpifort, -lfmpich, -lmpi_f77
 	LIB_MPIFORTRAN = -lfmpich # OpenMPI 1.10.2. Other possibilities: -lmpifort, -lfmpich, -lmpi_f77
 else
-	CXX = g++
+	CXX = g++-11
 	CXX_BACKEND = ${CXX}
 endif
 
 ## path to Boost's base directory, if not in standard system location
-BOOST_ROOT_DIR =
+BOOST_ROOT_DIR = /Users/rclam/projects/boost_1_75_0
 
 ########################################################################
 ## Select compiler and linker flags
