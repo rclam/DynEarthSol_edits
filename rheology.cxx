@@ -117,12 +117,16 @@ static void elastic(double bulkm, double shearm, const double* de, double* s)
         s[i] += 2 * shearm * de[i];
 }
 
-static void emt_elastic(double bulkm, double shearm, const double* de, double* s, double P_fl)
+static void emt_elastic(double bulkm, double shearm, const double* de, double* s) //, double P_fl
 {
+    //cout << "\n\nStarting emt_elastic\n" ;
+
     /* increment the stress s according to the incremental strain de */
     double lambda = bulkm - 2. /3 * shearm;
     double dev = trace(de);
     //double mu = 0.5*(3*(bulkm - lambda));
+
+    //cout << "\nSolving for intact stiffness\n" ;
 
     // intact rock stiffness c_i
     double c_i[6][6] = {
@@ -134,10 +138,22 @@ static void emt_elastic(double bulkm, double shearm, const double* de, double* s
         { 0.0, 0.0, 0.0, 0.0, 0.0, shearm}
     };
 
+    //for (int i = 0; i < N; i++) {
+	//	for (int j = 0; j < N; j++)
+	//		cout << c_i[i][j] << " ";
+	//	cout << endl;};
+
+
     // Refer to inverse.hpp
+    //std::cout << "Beginning inverse calculations\n" ;
+    //cout << "\nCreating empty adjoint\n" ;
     double adj_ci[6][6]; // To store adjoint of c_i[][]
+    //cout << "Creating empty inverse\n" ;
 	float inv_ci[6][6]; // To store inverse of c_i[][]
+
+    //cout << "rheology.cxx--- Solving for adjoint\n" ;
 	adjoint(c_i, adj_ci);
+    //cout << "rheology.cxx--- Solving for inverse\n" ;
     inverse(c_i, inv_ci);
     // intact rock compliance S_i
     double S_i[6][6] = {
@@ -157,11 +173,13 @@ static void emt_elastic(double bulkm, double shearm, const double* de, double* s
     double E0 = shearm * ((3*lambda + 2*shearm)/(lambda + shearm)); // Young's Mod
     double v = lambda / (2*(lambda + shearm));          // poisson ratio
 
+    double P_fl=50e+06;
     // scalar crack density
-    double rho = 0.1;
+    double rho = 0.0;
     // normal vector
-    double theta = 30.0; //30 degree dip
-    double th_rad = ((90-theta)+90)*(M_PI/180); // degree in radian, Use cmath PI
+    //!!! check theta orientation
+    double theta = 0.0; //30 degree dip
+    double th_rad = ((90+theta)-90)*(M_PI/180); // degree in radian, Use cmath PI
     double a_n[3] = {cos(th_rad), sin(th_rad), 0.0};
     // crack density tensor alpha
     double a_alpha[3][3] = {
@@ -169,14 +187,14 @@ static void emt_elastic(double bulkm, double shearm, const double* de, double* s
         {0.0,0.0,0.0},
         {0.0,0.0,0.0}
         };
-    for (i=0; i<3; i++){
-        for (j=0; j<3; j++){
+    for (int i=0; i<3; i++){
+        for (int j=0; j<3; j++){
             a_alpha[i][j] = rho*a_n[i]*a_n[j]; //outer product of normal tensor
         }
     }
 
     // correction term (S_voigt): delta_s_a * delta_s_b
-    double delta_s_a = (8*(1-v**2))/(3*E0*(2-v));
+    double delta_s_a = (8*(1-pow(v,2)))/(3*E0*(2-v));
     double delta_s_b[6][6] = {
         //row 1
         {4*a_alpha[0][0], 0.0, 0.0, 0.0, 2*a_alpha[0][2], 2*a_alpha[0][1]}, 
@@ -187,10 +205,9 @@ static void emt_elastic(double bulkm, double shearm, const double* de, double* s
         //row 4
         {2*a_alpha[2][1], 2*a_alpha[1][2], a_alpha[1][1] + a_alpha[2][2], a_alpha[1][0], a_alpha[2][0]}, 
         //row 5
-        {2*a_alpha[2][0], 0.0, 2*a_alpha[0][2], a_alpha[0][1], a_alpha[0][0] + a_alpha[2][2], a_alpha[2][1]}. 
+        {2*a_alpha[2][0], 0.0, 2*a_alpha[0][2], a_alpha[0][1], a_alpha[0][0] + a_alpha[2][2], a_alpha[2][1]}, 
         //row 6
-        {2*a_alpha[1][0], 2*a_alpha[0][1], 0.0, a_alpha[0][2], a_alpha[1][2], a_alpha[0][0]+a_alpha[1][1]}, 
-    };
+        {2*a_alpha[1][0], 2*a_alpha[0][1], 0.0, a_alpha[0][2], a_alpha[1][2], a_alpha[0][0]+a_alpha[1][1]}};
 
     //correction term
     //double S_voigt = delta_s_a * delta_s_b; 
@@ -202,8 +219,8 @@ static void emt_elastic(double bulkm, double shearm, const double* de, double* s
         {0.0,0.0,0.0,0.0,0.0,0.0},
         {0.0,0.0,0.0,0.0,0.0,0.0}
     };
-    for (i=0; i<6; i++){
-        for (j=0; j<6; j++){
+    for (int i=0; i<6; i++){
+        for (int j=0; j<6; j++){
             S_voigt[i][j] = delta_s_a * delta_s_b[i][j];
         }
     }
@@ -218,9 +235,9 @@ static void emt_elastic(double bulkm, double shearm, const double* de, double* s
         {0.0,0.0,0.0,0.0,0.0,0.0},
         {0.0,0.0,0.0,0.0,0.0,0.0}
         };
-    for (i=0; i<6; i++){
-        for (j=0; j<6; j++){
-            S_e[i][j] = S_i[i][j] + S_voight[i][j];
+    for (int i=0; i<6; i++){
+        for (int j=0; j<6; j++){
+            S_e[i][j] = S_i[i][j] + S_voigt[i][j];
         }
     }
 
@@ -246,16 +263,16 @@ static void emt_elastic(double bulkm, double shearm, const double* de, double* s
 
     // Calculate Biot tensor (B_ij = delta_ij - c_e*S_i)
     double S_i_psum[6] = {0.0,0.0,0.0,0.0,0.0,0.0};
-    for (i=0, i<6, i++){
-        for (j=0, j<3, j++){
+    for (int i=0; i<6; i++){
+        for (int j=0; j<3; j++){
             S_i_psum[i] += S_i[i][j];
         }
     }
 
     // dot product CS in voigt
     double CS_V[6] = {0.0, 0.0, 0.0, 0.0, 0.0, 0.0};
-    for (i=0; i<6; i++){
-        for (j=0; j<3; j++){
+    for (int i=0; i<6; i++){
+        for (int j=0; j<3; j++){
             CS_V[i] += c_e[i][j]*S_i_psum[j];
         }
     }
@@ -278,8 +295,8 @@ static void emt_elastic(double bulkm, double shearm, const double* de, double* s
         {0.0,0.0,0.0},
         {0.0,0.0,0.0}
         };
-    for (i=0; i<3; i++){
-        for (j=0; j<3; j++){
+    for (int i=0; i<3; i++){
+        for (int j=0; j<3; j++){
             Biot[i][j] = Kronecker_delta[i][j] - CS[i][j];
         }
     }
@@ -290,8 +307,8 @@ static void emt_elastic(double bulkm, double shearm, const double* de, double* s
         {0.0,0.0,0.0},
         {0.0,0.0,0.0}
         };
-    for (i=0; i<3; i++){
-        for (j=0; j<3; j++){
+    for (int i=0; i<3; i++){
+        for (int j=0; j<3; j++){
             stress_corr[i][j] = -P_fl * Biot[i][j];
         }
     }
@@ -301,8 +318,7 @@ static void emt_elastic(double bulkm, double shearm, const double* de, double* s
         stress_corr[2][2], 
         stress_corr[1][2], 
         stress_corr[0][2], 
-        stress_corr[0][1]
-        };
+        stress_corr[0][1]};
 
 
 // add correcting term to current intact stress (in voigt notation) to get effective stress
@@ -514,7 +530,7 @@ static void emt(double bulkm, double shearm,
      */
 
     // elastic trial stress
-    emt_elastic(bulkm, shearm, de, s, P_fl=50e+06); // rename to emt_elastic
+    emt_elastic(bulkm, shearm, de, s); // rename to emt_elastic *** include double P_fl=50e+06
     depls = 0;
     failure_mode = 0;
 

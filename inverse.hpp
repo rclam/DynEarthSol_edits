@@ -33,7 +33,8 @@ void getCofactor(double A[N][N], double temp[N][N], int p, int q,
 /* Recursive function for finding determinant of matrix.
 n is current dimension of A[][]. */
 double determinant(double A[N][N], double n)
-{
+{	
+	//std::cout << "Solve for determinant";
 	double D = 0; // Initialize result
 
 	// Base case : if matrix contains single element
@@ -60,6 +61,7 @@ double determinant(double A[N][N], double n)
 // Function to get adjoint of A[N][N] in adj[N][N].
 void adjoint(double A[N][N], double adj[N][N])
 {
+	//cout << "inverse.hpp--- solve for adjoint\n" ;
 	if (N == 1) {
 		adj[0][0] = 1;
 		return;
@@ -88,8 +90,11 @@ void adjoint(double A[N][N], double adj[N][N])
 // matrix is singular
 bool inverse(double A[N][N], float inverse[N][N])
 {
+	//cout << "inverse.hpp--- solve for inverse\n" ;
 	// Find determinant of A[][]
 	double det = determinant(A, N);
+	//cout << "Determinant (double): " << det <<"\n";
+
 	if (det == 0) {
 		cout << "Singular matrix, can't find its inverse";
 		return false;
@@ -97,14 +102,19 @@ bool inverse(double A[N][N], float inverse[N][N])
 
 	// Find adjoint
 	double adj[N][N];
+	//cout << "Within inv. fct, find adjoint";
 	adjoint(A, adj);
+	//cout << "Adjoint: \n";
+	//for (int i = 0; i < N; i++) {
+	//	for (int j = 0; j < N; j++){
+	//	std::cout << adj[i][j] << " ";}
+	//std::cout << endl;}
 
 	// Find Inverse using formula "inverse(A) =
 	// adj(A)/det(A)"
 	for (int i = 0; i < N; i++)
 		for (int j = 0; j < N; j++)
-			inverse[i][j] = adj[i][j] / float(det);
-
+			inverse[i][j] = adj[i][j] / det;
 	return true;
 }
 
