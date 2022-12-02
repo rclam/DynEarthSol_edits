@@ -10,6 +10,7 @@
 #include "rheology.hpp"
 #include "utils.hpp"
 #include "inverse.hpp"
+#include "ic.hpp"
 
 
 
@@ -112,12 +113,12 @@ static void elastic(double bulkm, double shearm, const double* de, double* s)
     double dev = trace(de);
 
     for (int i=0; i<NDIMS; ++i)
-        s[i] += 2 * shearm * de[i] + lambda * dev;
+        s[i] += 2 * shearm * de[i] + lambda * dev; //- P_fl !! 
     for (int i=NDIMS; i<NSTR; ++i)
         s[i] += 2 * shearm * de[i];
 }
 
-static void emt_elastic(double bulkm, double shearm, const double* de, double* s) //, double P_fl
+static void emt_elastic(double bulkm, double shearm, const double* de, double* s, double pf_z) //, double P_fl
 {
     //cout << "\n\nStarting emt_elastic\n" ;
 
@@ -173,12 +174,11 @@ static void emt_elastic(double bulkm, double shearm, const double* de, double* s
     double E0 = shearm * ((3*lambda + 2*shearm)/(lambda + shearm)); // Young's Mod
     double v = lambda / (2*(lambda + shearm));          // poisson ratio
 
-    double P_fl=50e+06;
     // scalar crack density
     double rho = 0.0;
     // normal vector
     //!!! check theta orientation
-    double theta = 0.0; //30 degree dip
+    double theta = 45.0; //30 degree dip
     double th_rad = ((90+theta)-90)*(M_PI/180); // degree in radian, Use cmath PI
     double a_n[3] = {cos(th_rad), sin(th_rad), 0.0};
     // crack density tensor alpha
@@ -307,9 +307,13 @@ static void emt_elastic(double bulkm, double shearm, const double* de, double* s
         {0.0,0.0,0.0},
         {0.0,0.0,0.0}
         };
+
+    
     for (int i=0; i<3; i++){
         for (int j=0; j<3; j++){
-            stress_corr[i][j] = -P_fl * Biot[i][j];
+            //stress_corr[i][j] = -P_fl * Biot[i][j];
+            stress_corr[i][j] = -pf_z * Biot[i][j];
+
         }
     }
     double stress_corr_V[6] = {
@@ -324,9 +328,10 @@ static void emt_elastic(double bulkm, double shearm, const double* de, double* s
 // add correcting term to current intact stress (in voigt notation) to get effective stress
 
     for (int i=0; i<NDIMS; ++i)
-        s[i] += 2 * shearm * de[i] + lambda * dev + stress_corr_V[i];
+        s[i] += 2 * shearm * de[i] + lambda * dev + stress_corr_V[i]; // (!!! where to put??)
     for (int i=NDIMS; i<NSTR; ++i)
         s[i] += 2 * shearm * de[i] + stress_corr_V[i]; //isotropic, linear elastic stress update. Correction term should be added to this
+                            //  (!!! where to put??)
 }
 
 
@@ -519,7 +524,7 @@ static void emt(double bulkm, double shearm,
                            double amc, double anphi, double anpsi,
                            double hardn, double ten_max,
                            const double* de, double& depls, double* s,
-                           int &failure_mode)
+                           int &failure_mode, double pf_z)
 {
     /* Elasto-plasticity (Mohr-Coulomb criterion)
      *
@@ -530,7 +535,7 @@ static void emt(double bulkm, double shearm,
      */
 
     // elastic trial stress
-    emt_elastic(bulkm, shearm, de, s); // rename to emt_elastic *** include double P_fl=50e+06
+    emt_elastic(bulkm, shearm, de, s, pf_z); // rename to emt_elastic *** include double P_fl=50e+06
     depls = 0;
     failure_mode = 0;
 
@@ -968,15 +973,16 @@ void update_stress(const Variables& var, tensor_t& stress,
                 var.mat->plastic_props(e, plstrain[e],
                                        amc, anphi, anpsi, hardn, ten_max);
                 int failure_mode;
+                double pf_z = pore_fluid_pressure(var, e);
                 if (var.mat->is_plane_strain) {
                     //elasto_plastic2d(bulkm, shearm, amc, anphi, anpsi, hardn, ten_max,
                     //                 de, depls, s, syy, failure_mode);
                     emt(bulkm, shearm, amc, anphi, anpsi, hardn, ten_max,
-                                   de, depls, s, failure_mode);
+                                   de, depls, s, failure_mode, pf_z);
                 }
                 else {
                     emt(bulkm, shearm, amc, anphi, anpsi, hardn, ten_max,
-                                   de, depls, s, failure_mode);
+                                   de, depls, s, failure_mode, pf_z);
                 }
                 plstrain[e] += depls;
                 delta_plstrain[e] = depls;

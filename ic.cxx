@@ -131,6 +131,28 @@ void initial_stress_state(const Param &param, const Variables &var,
     compensation_pressure = ref_pressure(param, -param.mesh.zlength);
 }
 
+double pore_fluid_pressure(const Variables &var, const int e)
+{
+
+    // lithostatic condition for stress and strain
+    double rhof = 1000; //var.mat->rho(0); (we use water density kg/m3)
+    double pf_z; 
+    double gravity = 9.8;
+
+    
+    const int *conn = (*var.connectivity)[e];
+    double zcenter = 0;
+    for (int i=0; i<NODES_PER_ELEM; ++i) {
+        zcenter += (*var.coord)[conn[i]][NDIMS-1];
+    }
+    zcenter /= NODES_PER_ELEM;
+
+    pf_z = rhof * gravity * -zcenter;
+
+
+    //compensation_pressure = ref_pressure(param, -param.mesh.zlength);
+    return pf_z;
+}
 
 void initial_weak_zone(const Param &param, const Variables &var,
                        double_vec &plstrain)
