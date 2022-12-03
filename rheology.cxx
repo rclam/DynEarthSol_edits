@@ -178,7 +178,7 @@ static void emt_elastic(double bulkm, double shearm, const double* de, double* s
     double rho = 0.0;
     // normal vector
     //!!! check theta orientation
-    double theta = 45.0; //30 degree dip
+    double theta = 90.0; //30 degree dip
     double th_rad = ((90+theta)-90)*(M_PI/180); // degree in radian, Use cmath PI
     double a_n[3] = {cos(th_rad), sin(th_rad), 0.0};
     // crack density tensor alpha
