@@ -147,7 +147,7 @@ double pore_fluid_pressure(const Variables &var, const int e)
     }
     zcenter /= NODES_PER_ELEM;
 
-    pf_z = rhof * gravity * -zcenter;
+    pf_z = rhof * gravity * zcenter;
 
 
     //compensation_pressure = ref_pressure(param, -param.mesh.zlength);
