@@ -162,7 +162,7 @@ void update_strain_rate(const Variables& var, tensor_t& strain_rate)
     double *v[NODES_PER_ELEM];
 
     #pragma omp parallel for default(none) \
-        shared(var, strain_rate) private(v)
+        shared(var, strain_rate, std::cerr) private(v)
     for (int e=0; e<var.nelem; ++e) {
         const int *conn = (*var.connectivity)[e];
         const double *shpdx = (*var.shpdx)[e];
@@ -175,16 +175,19 @@ void update_strain_rate(const Variables& var, tensor_t& strain_rate)
         // XX component
         int n = 0;
         s[n] = 0;
-        for (int i=0; i<NODES_PER_ELEM; ++i)
+        for (int i=0; i<NODES_PER_ELEM; ++i){
             s[n] += v[i][0] * shpdx[i];
+        }
+            
 
 #ifdef THREED
         const double *shpdy = (*var.shpdy)[e];
         // YY component
         n = 1;
         s[n] = 0;
-        for (int i=0; i<NODES_PER_ELEM; ++i)
+        for (int i=0; i<NODES_PER_ELEM; ++i){
             s[n] += v[i][1] * shpdy[i];
+        }
 #endif
 
         // ZZ component
@@ -194,8 +197,10 @@ void update_strain_rate(const Variables& var, tensor_t& strain_rate)
         n = 1;
 #endif
         s[n] = 0;
-        for (int i=0; i<NODES_PER_ELEM; ++i)
+        for (int i=0; i<NODES_PER_ELEM; ++i) {
             s[n] += v[i][NDIMS-1] * shpdz[i];
+            //std::cerr << e << " " << i << " " << v[i][NDIMS-1]<< " " << shpdz[i] << std::endl;
+	}
 
 #ifdef THREED
         // XY component
