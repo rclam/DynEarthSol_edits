@@ -178,22 +178,20 @@ static void emt_elastic(double bulkm, double shearm, const double* de, double* s
 		for (int j = 0; j < N; j++)
 			S_i[i][j]= inv_ci[i][j];
     };
-    /*cout << "\nS_i: \n";
-	for (int i = 0; i < 6; i++) {
+    //cout << "\nS_i: \n";
+	/*for (int i = 0; i < 6; i++) {
 		for (int j = 0; j < 6; j++){
 		std::cout << S_i[i][j] << " ";}
 	std::cout << endl;}*/
-    
-
 
     double E0 = shearm * ((3*lambda + 2*shearm)/(lambda + shearm)); // Young's Mod
     double v = lambda / (2*(lambda + shearm));          // poisson ratio
 
     // scalar crack density
-    double rho = 0.01;
+    double rho = 0.0;
     // normal vector
     //!!! check theta orientation
-    double theta = 90.0; //30 degree dip
+    double theta = 0.0; //30 degree dip
     double th_rad = ((90+theta)-90)*(M_PI/180); // degree in radian, Use cmath PI
     double a_n[3] = {cos(th_rad), sin(th_rad), 0.0};
     // crack density tensor alpha
@@ -207,11 +205,13 @@ static void emt_elastic(double bulkm, double shearm, const double* de, double* s
             a_alpha[i][j] = rho*a_n[i]*a_n[j]; //tensor product of normal tensor
         }
     }
-    /*cout << "\nalpha: \n";
-	for (int i = 0; i < 3; i++) {
+    //std::cout << "\nalpha: \n";
+	/*for (int i = 0; i < 3; i++) {
 		for (int j = 0; j < 3; j++){
-		std::cout << a_alpha[i][j] << " ";}
-	std::cout << endl;}*/
+		    std::cout << a_alpha[i][j] << " ";
+        }
+	    std::cout << endl;
+    }*/
     
 
     // correction term (S_voigt): delta_s_a * delta_s_b
@@ -224,7 +224,7 @@ static void emt_elastic(double bulkm, double shearm, const double* de, double* s
         //row 3
         {0.0, 0.0, 4*a_alpha[2][2], 2*a_alpha[2][1], 2*a_alpha[2][0], 0.0}, 
         //row 4
-        {2*a_alpha[2][1], 2*a_alpha[1][2], a_alpha[1][1] + a_alpha[2][2], a_alpha[1][0], a_alpha[2][0]}, 
+        {0.0, 2*a_alpha[2][1], 2*a_alpha[1][2], a_alpha[1][1] + a_alpha[2][2], a_alpha[1][0], a_alpha[2][0]}, 
         //row 5
         {2*a_alpha[2][0], 0.0, 2*a_alpha[0][2], a_alpha[0][1], a_alpha[0][0] + a_alpha[2][2], a_alpha[2][1]}, 
         //row 6
@@ -245,6 +245,15 @@ static void emt_elastic(double bulkm, double shearm, const double* de, double* s
             S_voigt[i][j] = delta_s_a * delta_s_b[i][j];
         }
     }
+
+    //std::cout << "\nS_voigt: \n";
+	/*for (int i = 0; i < 6; i++) {
+		for (int j = 0; j < 6; j++){
+		    std::cout << S_voigt[i][j] << " ";
+        }
+	    std::cout << endl;
+    }*/
+    
     // cracked compliance
     //double S_e = S_i + S_voigt; 
     // put addition in for loop w/ mulitpl. above
@@ -261,6 +270,13 @@ static void emt_elastic(double bulkm, double shearm, const double* de, double* s
             S_e[i][j] = S_i[i][j] + S_voigt[i][j];
         }
     }
+    //std::cout << "\nS_e: \n";
+	/*for (int i = 0; i < 6; i++) {
+		for (int j = 0; j < 6; j++){
+		    std::cout << S_e[i][j] << " ";
+        }
+	    std::cout << endl;
+    }*/
 
     // New Cracked Stiffness c_e
     // Refer to inverse.hpp
@@ -305,12 +321,12 @@ static void emt_elastic(double bulkm, double shearm, const double* de, double* s
         {CS_V[4], CS_V[3],CS_V[2]}
         };
 
-    /*cout << "\nCS (dot prod): \n";
-	for (int i = 0; i < 3; i++) {
+    //std::cout << "\nCS (dot prod): \n";
+	/*for (int i = 0; i < 3; i++) {
 		for (int j = 0; j < 3; j++){
 		std::cout << CS[i][j] << " ";}
-	std::cout << endl;}
-    */
+	std::cout << endl;}*/
+    
 
     // solve for biot tensor
     // B_ij = Kronecker - CS
@@ -330,11 +346,14 @@ static void emt_elastic(double bulkm, double shearm, const double* de, double* s
         }
     }
     
-    /*cout << "\nBiot Tensor: \n";
-	for (int i = 0; i < 3; i++) {
-		for (int j = 0; j < 3; j++){
-		std::cout << Biot[i][j] << " ";}
-	std::cout << endl;}*/
+    //std::cout << "\nBiot Tensor: \n";
+	/*for (int i = 0; i < 3; i++) {
+		for (int j = 0; j < 3; j++)
+        {
+		    std::cout << Biot[i][j] << " ";
+        }
+	    std::cout << endl;
+        }*/
     
 
 
@@ -345,49 +364,50 @@ static void emt_elastic(double bulkm, double shearm, const double* de, double* s
         {0.0,0.0,0.0}
         };
 
-    //pf_z = 1;
     for (int i=0; i<3; i++){
         for (int j=0; j<3; j++){
             //stress_corr[i][j] = -P_fl * Biot[i][j];
             stress_corr[i][j] = -pf_z * Biot[i][j];
         }
     }
-    cout << "\npf_z: " << pf_z << "\n";
+    //cout << "\npf_z: " << pf_z << "\n";
 
-    /*cout << "\nstress_corr: \n";
-	for (int i = 0; i < 3; i++) {
+    //std::cout << "\nstress_corr: \n";
+	/*for (int i = 0; i < 3; i++) {
 		for (int j = 0; j < 3; j++){
 		std::cout << stress_corr[i][j] << " ";}
 	std::cout << endl;}*/
     
-
-    double stress_corr_V[6] = {
-        stress_corr[0][0], 
-        stress_corr[1][1], 
-        stress_corr[2][2], 
-        stress_corr[1][2], 
-        stress_corr[0][2], 
-        stress_corr[0][1]};
-
+    double stress_corr_V[NSTR] = {0.0};
+    for (int i = 0; i < NDIMS; i++)
+        stress_corr_V[i] = stress_corr[i][i];
+    if( NDIMS == 2)
+        stress_corr_V[2] = stress_corr[0][1];
+    else if( NDIMS == 3) {
+        stress_corr_V[3] = stress_corr[1][2];
+        stress_corr_V[4] = stress_corr[0][2];
+        stress_corr_V[5] = stress_corr[0][1];
+    }
 
 // add correcting term to current intact stress (in voigt notation) to get effective stress
 
     for (int i=0; i<NDIMS; ++i){
-        std::cout << "\ndiagonal: pre\n" << " s[i]: " << s[i] << " \n";
-        std::cout << " de[i]: " << de[i] << " \n";
-        std::cout << " stress_corr[i]: " << stress_corr_V[i] << " \n";
-        std::cout << " dev: " << dev << " \n";
+        //std::cout << "\n i = " << i <<" diagonal: pre\n" << " s[i]: " << s[i] << " \n";
+        //std::cout << " de[i]: " << de[i] << " \n";
+        //std::cout << " stress [i]: " << 2 * shearm * de[i] + lambda * dev << std::endl;
+        //std::cout << " stress_corr[i]: " << stress_corr_V[i] << " \n";
+        //std::cout << " dev: " << dev << " \n";
         s[i] += 2 * shearm * de[i] + lambda * dev + stress_corr_V[i]; //
-        std::cout << "diagonal: post \n"   << s[i] << " \n" << de[i] << " \n" << stress_corr_V[i] << " \n" << dev << " \n" ;
+        //std::cout << "diagonal: post \n"   << s[i] << " \n" << de[i] << " \n" << stress_corr_V[i] << " \n" << dev << " \n" ;
         
     }
     for (int i=NDIMS; i<NSTR; ++i){
-        std::cout << "\n\noff diagonal: pre\n"   << s[i] << " \n";
+        //std::cout << "\n\noff diagonal: pre\n"   << s[i] << " \n";
         s[i] += 2 * shearm * de[i] + stress_corr_V[i]; //isotropic, linear elastic stress update. Correction term should be added to this
-        std::cout << "off diagonal: post\n" << s[i] << " \n";
+        //std::cout << "off diagonal: post\n" << s[i] << " \n";
     }
-    /*cout << "\nstress update: \n";
-	for (int i = 0; i < NDIMS; i++)
+    //std::cout << "\nstress update: \n";
+	/*for (int i = 0; i < NSTR; i++)
     {   std::cout << s[i] << " ";
 	std::cout << endl;}*/
     
@@ -1039,6 +1059,7 @@ void update_stress(const Variables& var, tensor_t& stress,
                                        amc, anphi, anpsi, hardn, ten_max);
                 int failure_mode;
                 double pf_z = pore_fluid_pressure(var, e);
+                //std::cerr << e <<" " << pf_z << std::endl;
                 if (var.mat->is_plane_strain) {
                     //elasto_plastic2d(bulkm, shearm, amc, anphi, anpsi, hardn, ten_max,
                     //                 de, depls, s, syy, failure_mode);
