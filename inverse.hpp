@@ -88,7 +88,7 @@ void adjoint(double A[N][N], double adj[N][N])
 
 // Function to calculate and store inverse, returns false if
 // matrix is singular
-bool inverse(double A[N][N], float inverse[N][N])
+bool inverse(double A[N][N], double inverse[N][N])
 {
 	//cout << "inverse.hpp--- solve for inverse\n" ;
 	// Find determinant of A[][]

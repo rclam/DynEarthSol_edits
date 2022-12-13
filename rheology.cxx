@@ -159,7 +159,7 @@ static void emt_elastic(double bulkm, double shearm, const double* de, double* s
     //cout << "\nCreating empty adjoint\n" ;
     double adj_ci[6][6]; // To store adjoint of c_i[][]
     //cout << "Creating empty inverse\n" ;
-	float inv_ci[6][6]; // To store inverse of c_i[][]
+	double inv_ci[6][6]; // To store inverse of c_i[][]
 
     //cout << "rheology.cxx--- Solving for adjoint\n" ;
 	adjoint(c_i, adj_ci);
@@ -204,7 +204,7 @@ static void emt_elastic(double bulkm, double shearm, const double* de, double* s
         };
     for (int i=0; i<3; i++){
         for (int j=0; j<3; j++){
-            a_alpha[i][j] = rho*a_n[i]*a_n[j]; //outer product of normal tensor
+            a_alpha[i][j] = rho*a_n[i]*a_n[j]; //tensor product of normal tensor
         }
     }
     /*cout << "\nalpha: \n";
@@ -215,7 +215,7 @@ static void emt_elastic(double bulkm, double shearm, const double* de, double* s
     
 
     // correction term (S_voigt): delta_s_a * delta_s_b
-    double delta_s_a = (8*(1-pow(v,2)))/(3*E0*(2-v));
+    double delta_s_a = (8.0*(1.0-pow(v,2)))/(3.0*E0*(2.0-v));
     double delta_s_b[6][6] = {
         //row 1
         {4*a_alpha[0][0], 0.0, 0.0, 0.0, 2*a_alpha[0][2], 2*a_alpha[0][1]}, 
@@ -265,7 +265,7 @@ static void emt_elastic(double bulkm, double shearm, const double* de, double* s
     // New Cracked Stiffness c_e
     // Refer to inverse.hpp
     double adj_se[6][6]; // To store adjoint of S_e[][]
-	float inv_se[6][6]; // To store inverse of S_e[][]
+	double inv_se[6][6]; // To store inverse of S_e[][]
 	adjoint(S_e, adj_se);
     inverse(S_e, inv_se);
     // intact rock compliance S_i
