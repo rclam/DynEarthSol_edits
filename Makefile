@@ -39,7 +39,7 @@ ifeq ($(useadapt), 1)
 	CXX_BACKEND = g++
 
 	# path to vtk header files, if not in standard system location
-	VTK_INCLUDE = /opt/local/include/vtk-8.1
+	VTK_INCLUDE = /home/rclam/VTK-9.2.0.rc2 #I /opt/local/include/vtk-8.1
 
 	# path of vtk library files, if not in standard system location
 	VTK_LIBS = /opt/local/lib
@@ -53,7 +53,7 @@ else
 endif
 
 ## path to Boost's base directory, if not in standard system location
-BOOST_ROOT_DIR = /Users/rclam/projects/boost_1_75_0
+BOOST_ROOT_DIR = /home/rclam/boost_1_75_0
 
 ########################################################################
 ## Select compiler and linker flags
@@ -253,7 +253,7 @@ ifeq ($(usemmg), 1)
 	CXXFLAGS += $(MMG_CXXFLAGS)
 	LDFLAGS += $(MMG_LDFLAGS)
 endif
-
+CXXFLAGS += -I/home/rclam/projects/inverse_trials/eigen-3.4.0
 C3X3_DIR = 3x3-C
 C3X3_LIBNAME = 3x3
 
@@ -275,7 +275,7 @@ endif
 
 .PHONY: all clean take-snapshot
 
-all: $(EXE) tetgen/tetgen triangle/triangle take-snapshot
+all: $(EXE) take-snapshot
 
 ifeq ($(useadapt), 1)
 
@@ -367,9 +367,6 @@ $(TRI_OBJS): %.o : %.c $(TRI_INCS)
 	@# Triangle cannot be compiled with -O2
 	$(CXX) $(CXXFLAGS) -O1 -DTRILIBRARY -DREDUCED -DANSI_DECLARATORS -c $< -o $@
 
-triangle/triangle: triangle/triangle.c
-	$(CXX) $(CXXFLAGS) -O1 -DREDUCED -DANSI_DECLARATORS triangle/triangle.c -o $@
-
 tetgen/predicates.o: tetgen/predicates.cxx $(TET_INCS)
 	@# Compiling J. Shewchuk predicates, should always be
 	@# equal to -O0 (no optimization). Otherwise, TetGen may not
@@ -378,9 +375,6 @@ tetgen/predicates.o: tetgen/predicates.cxx $(TET_INCS)
 
 tetgen/tetgen.o: tetgen/tetgen.cxx $(TET_INCS)
 	$(CXX) $(CXXFLAGS) -DNDEBUG -DTETLIBRARY -Wno-unused-but-set-variable -Wno-int-to-pointer-cast -c $< -o $@
-
-tetgen/tetgen: tetgen/predicates.cxx tetgen/tetgen.cxx
-	$(CXX) $(CXXFLAGS) -O0 -DNDEBUG -Wno-unused-but-set-variable -Wno-int-to-pointer-cast tetgen/predicates.cxx tetgen/tetgen.cxx -o $@
 
 $(C3X3_DIR)/lib$(C3X3_LIBNAME).a:
 	@+$(MAKE) -C $(C3X3_DIR)
