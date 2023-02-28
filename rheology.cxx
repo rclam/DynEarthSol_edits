@@ -9,8 +9,19 @@
 #include "matprops.hpp"
 #include "rheology.hpp"
 #include "utils.hpp"
-#include "inverse.hpp"
+//#include "inverse.hpp"
+#include <Eigen/Dense>
+using Eigen::MatrixXd;
+using Eigen::VectorXd;
+
+
 #include "ic.hpp"
+//To calculate elapsed time and write it down to an external file.
+#include <iomanip>      // std::setw
+#include <chrono>
+#include <fstream>
+using namespace std::chrono;
+//
 
 
 
@@ -120,7 +131,10 @@ static void elastic(double bulkm, double shearm, const double* de, double* s)
 
 static void emt_elastic(double bulkm, double shearm, const double* de, double* s, double pf_z) //, double P_fl
 {
-    //cout << "\n\nStarting emt_elastic\n" ;
+    // Create and open a text file
+    //std::ofstream MyFile("rheol_elapsed_time_emt_iso.txt");
+    std::ofstream MyFile("rheol_elapsed_time_eigen_deg00p01.txt");
+
     /*cout << "\ncurrent stress: \n";
 	for (int i = 0; i < NDIMS; i++)
     {   std::cout << s[i] << " ";
@@ -139,56 +153,41 @@ static void emt_elastic(double bulkm, double shearm, const double* de, double* s
     /*cout << "\nSolving for intact stiffness\n" ;*/
 
     // intact rock stiffness c_i
-    double c_i[6][6] = {
-        { lambda + 2*shearm, lambda, lambda, 0.0, 0.0, 0.0},
-        { lambda, lambda + 2*shearm, lambda, 0.0, 0.0, 0.0},
-        { lambda, lambda, lambda + 2*shearm, 0.0, 0.0, 0.0},
-        { 0.0, 0.0, 0.0, shearm, 0.0, 0.0},
-        { 0.0, 0.0, 0.0, 0.0, shearm, 0.0},
-        { 0.0, 0.0, 0.0, 0.0, 0.0, shearm}
-    };
+    MatrixXd c_i(6,6);
+        c_i <<
+        lambda + 2*shearm, lambda, lambda, 0.0, 0.0, 0.0,
+        lambda, lambda + 2*shearm, lambda, 0.0, 0.0, 0.0,
+        lambda, lambda, lambda + 2*shearm, 0.0, 0.0, 0.0,
+        0.0, 0.0, 0.0, shearm, 0.0, 0.0,
+        0.0, 0.0, 0.0, 0.0, shearm, 0.0,
+        0.0, 0.0, 0.0, 0.0, 0.0, shearm;
 
-    /*for (int i = 0; i < N; i++) {
-		for (int j = 0; j < N; j++)
-			cout << c_i[i][j] << " ";
-		cout << endl;};*/
+    MyFile <<  "\nc_i: \n" << c_i << std::endl;
 
-
-    // Refer to inverse.hpp
     //std::cout << "Beginning inverse calculations\n" ;
-    //cout << "\nCreating empty adjoint\n" ;
-    double adj_ci[6][6]; // To store adjoint of c_i[][]
     //cout << "Creating empty inverse\n" ;
-	double inv_ci[6][6]; // To store inverse of c_i[][]
+	//double inv_ci[6][6]; // To store inverse of c_i[][]
 
-    //cout << "rheology.cxx--- Solving for adjoint\n" ;
-	adjoint(c_i, adj_ci);
-    //cout << "rheology.cxx--- Solving for inverse\n" ;
-    inverse(c_i, inv_ci);
-    // intact rock compliance S_i
-    double S_i[6][6] = {
-        {0.0,0.0,0.0,0.0,0.0,0.0},
-        {0.0,0.0,0.0,0.0,0.0,0.0},
-        {0.0,0.0,0.0,0.0,0.0,0.0},
-        {0.0,0.0,0.0,0.0,0.0,0.0},
-        {0.0,0.0,0.0,0.0,0.0,0.0},
-        {0.0,0.0,0.0,0.0,0.0,0.0}
-    }; 
-    for (int i = 0; i < N; i++) {
-		for (int j = 0; j < N; j++)
-			S_i[i][j]= inv_ci[i][j];
-    };
-    //cout << "\nS_i: \n";
-	/*for (int i = 0; i < 6; i++) {
-		for (int j = 0; j < 6; j++){
-		std::cout << S_i[i][j] << " ";}
-	std::cout << endl;}*/
+    // ============ Solving for S_i ==========================================
+    auto beg2 = high_resolution_clock::now();
+    //cout <<  "\nHere is c_i.inverse():   \n" << c_i.inverse() <<"\n"  << endl;
+    MatrixXd S_i(6,6);
+    S_i << c_i.inverse(); // intact rock compliance S_i
+    auto end2 = high_resolution_clock::now();
+    MyFile <<  "\nS_i: \n" << S_i << std::endl;
+
+    auto duration2 = duration_cast<microseconds>(end2 - beg2);
+    // Displaying the elapsed time
+    //std::cout << "S_i -->      Elapsed Time: " << std::setw(5) << std::setprecision(5) << duration.count()*1e-6 << " sec"<<std::endl;
+    MyFile << "Intact compliance calc.: Elapsed Time: " << std::setw(5) << std::setprecision(5) << duration2.count()*1e-6 << " sec"<<std::endl;
+    // ================================================================
+
 
     double E0 = shearm * ((3*lambda + 2*shearm)/(lambda + shearm)); // Young's Mod
     double v = lambda / (2*(lambda + shearm));          // poisson ratio
 
     // scalar crack density
-    double rho = 0.0;
+    double rho = 0.01;
     // normal vector
     //!!! check theta orientation
     double theta = 0.0; //30 degree dip
@@ -200,126 +199,146 @@ static void emt_elastic(double bulkm, double shearm, const double* de, double* s
         {0.0,0.0,0.0},
         {0.0,0.0,0.0}
         };
+    // ============ Solving Alpha Tensor ==========================================
+    auto beg4 = high_resolution_clock::now();
     for (int i=0; i<3; i++){
         for (int j=0; j<3; j++){
             a_alpha[i][j] = rho*a_n[i]*a_n[j]; //tensor product of normal tensor
         }
     }
-    //std::cout << "\nalpha: \n";
-	/*for (int i = 0; i < 3; i++) {
-		for (int j = 0; j < 3; j++){
-		    std::cout << a_alpha[i][j] << " ";
-        }
-	    std::cout << endl;
-    }*/
-    
+    auto end4 = high_resolution_clock::now();
+
+    auto duration4 = duration_cast<microseconds>(end4 - beg4);
+    // Displaying the elapsed time
+    MyFile << "Alpha (crack dens. tensor): Elapsed Time: " << std::setw(5) << std::setprecision(5) << duration4.count()*1e-6 << " sec"<<std::endl;
+    //MyFile <<  "\na_alpha: \n" << a_alpha << std::endl;
+    // ================================================================
+
 
     // correction term (S_voigt): delta_s_a * delta_s_b
     double delta_s_a = (8.0*(1.0-pow(v,2)))/(3.0*E0*(2.0-v));
-    double delta_s_b[6][6] = {
-        //row 1
-        {4*a_alpha[0][0], 0.0, 0.0, 0.0, 2*a_alpha[0][2], 2*a_alpha[0][1]}, 
-        //row 2
-        {0.0, 4*a_alpha[1][1], 0.0, 2*a_alpha[1][2], 0.0, 2*a_alpha[1][0]}, 
-        //row 3
-        {0.0, 0.0, 4*a_alpha[2][2], 2*a_alpha[2][1], 2*a_alpha[2][0], 0.0}, 
-        //row 4
-        {0.0, 2*a_alpha[2][1], 2*a_alpha[1][2], a_alpha[1][1] + a_alpha[2][2], a_alpha[1][0], a_alpha[2][0]}, 
-        //row 5
-        {2*a_alpha[2][0], 0.0, 2*a_alpha[0][2], a_alpha[0][1], a_alpha[0][0] + a_alpha[2][2], a_alpha[2][1]}, 
-        //row 6
-        {2*a_alpha[1][0], 2*a_alpha[0][1], 0.0, a_alpha[0][2], a_alpha[1][2], a_alpha[0][0]+a_alpha[1][1]}};
+    // ============ Solving Correction term partial ==========================================
+    auto beg5 = high_resolution_clock::now();
+    MatrixXd delta_s_b(6,6);
+    delta_s_b << 
+        4*a_alpha[0][0], 0.0, 0.0, 0.0, 2*a_alpha[0][2], 2*a_alpha[0][1], 
+        0.0, 4*a_alpha[1][1], 0.0, 2*a_alpha[1][2], 0.0, 2*a_alpha[1][0], 
+        0.0, 0.0, 4*a_alpha[2][2], 2*a_alpha[2][1], 2*a_alpha[2][0], 0.0, 
+        0.0, 2*a_alpha[2][1], 2*a_alpha[1][2], a_alpha[1][1] + a_alpha[2][2], a_alpha[1][0], a_alpha[2][0], 
+        2*a_alpha[2][0], 0.0, 2*a_alpha[0][2], a_alpha[0][1], a_alpha[0][0] + a_alpha[2][2], a_alpha[2][1], 
+        2*a_alpha[1][0], 2*a_alpha[0][1], 0.0, a_alpha[0][2], a_alpha[1][2], a_alpha[0][0]+a_alpha[1][1];
+    auto end5 = high_resolution_clock::now();
+
+    auto duration5 = duration_cast<microseconds>(end5 - beg5);
+    // Displaying the elapsed time
+    MyFile << "delta_s_b calc: Elapsed Time: " << std::setw(5) << std::setprecision(5) << duration5.count()*1e-6 << " sec"<<std::endl;
+    MyFile <<  "\nS_i: \n" << S_i << std::endl;
+    // ================================================================
+
 
     //correction term
     //double S_voigt = delta_s_a * delta_s_b; 
-    double S_voigt[6][6] = {
-        {0.0,0.0,0.0,0.0,0.0,0.0},
-        {0.0,0.0,0.0,0.0,0.0,0.0},
-        {0.0,0.0,0.0,0.0,0.0,0.0},
-        {0.0,0.0,0.0,0.0,0.0,0.0},
-        {0.0,0.0,0.0,0.0,0.0,0.0},
-        {0.0,0.0,0.0,0.0,0.0,0.0}
-    };
-    for (int i=0; i<6; i++){
-        for (int j=0; j<6; j++){
-            S_voigt[i][j] = delta_s_a * delta_s_b[i][j];
-        }
-    }
-
-    //std::cout << "\nS_voigt: \n";
-	/*for (int i = 0; i < 6; i++) {
-		for (int j = 0; j < 6; j++){
-		    std::cout << S_voigt[i][j] << " ";
-        }
-	    std::cout << endl;
-    }*/
+    MatrixXd S_voigt(6,6);
+    S_voigt << 
+        0.0, 0.0, 0.0, 0.0, 0.0, 0.0,
+        0.0, 0.0, 0.0, 0.0, 0.0, 0.0,
+        0.0, 0.0, 0.0, 0.0, 0.0, 0.0,
+        0.0, 0.0, 0.0, 0.0, 0.0, 0.0,
+        0.0, 0.0, 0.0, 0.0, 0.0, 0.0,
+        0.0, 0.0, 0.0, 0.0, 0.0, 0.0;
+        
     
-    // cracked compliance
-    //double S_e = S_i + S_voigt; 
-    // put addition in for loop w/ mulitpl. above
-    double S_e[6][6] = {
-        {0.0,0.0,0.0,0.0,0.0,0.0},
-        {0.0,0.0,0.0,0.0,0.0,0.0},
-        {0.0,0.0,0.0,0.0,0.0,0.0},
-        {0.0,0.0,0.0,0.0,0.0,0.0},
-        {0.0,0.0,0.0,0.0,0.0,0.0},
-        {0.0,0.0,0.0,0.0,0.0,0.0}
-        };
-    for (int i=0; i<6; i++){
-        for (int j=0; j<6; j++){
-            S_e[i][j] = S_i[i][j] + S_voigt[i][j];
-        }
-    }
-    //std::cout << "\nS_e: \n";
-	/*for (int i = 0; i < 6; i++) {
-		for (int j = 0; j < 6; j++){
-		    std::cout << S_e[i][j] << " ";
-        }
-	    std::cout << endl;
-    }*/
+    // ============ Solving S_voigt ==========================================
+    auto beg6 = high_resolution_clock::now();
+    S_voigt << delta_s_a * delta_s_b;
+    auto end6 = high_resolution_clock::now();
+
+    auto duration6 = duration_cast<microseconds>(end6 - beg6);
+    // Displaying the elapsed time
+    MyFile << "S_voigt calc: Elapsed Time: " << std::setw(5) << std::setprecision(5) << duration6.count()*1e-6 << " sec"<<std::endl;
+    MyFile <<  "\nS_voigt: \n" << S_voigt << std::endl;
+    // ================================================================
+
+    MatrixXd S_e(6,6);
+    // ============ Solving S_e ==========================================
+    auto beg7 = high_resolution_clock::now();
+    S_e << S_i + S_voigt;
+    auto end7 = high_resolution_clock::now();
+
+    auto duration7 = duration_cast<microseconds>(end7 - beg7);
+    // Displaying the elapsed time
+    MyFile << "S_e calc: Elapsed Time: " << std::setw(5) << std::setprecision(5) << duration7.count()*1e-6 << " sec"<<std::endl;
+    MyFile <<  "\nS_e: \n" << S_e << std::endl;
+
+    // ================================================================
+
 
     // New Cracked Stiffness c_e
-    // Refer to inverse.hpp
-    double adj_se[6][6]; // To store adjoint of S_e[][]
-	double inv_se[6][6]; // To store inverse of S_e[][]
-	adjoint(S_e, adj_se);
-    inverse(S_e, inv_se);
-    // intact rock compliance S_i
-    double c_e[6][6] = {
-        {0.0,0.0,0.0,0.0,0.0,0.0},
-        {0.0,0.0,0.0,0.0,0.0,0.0},
-        {0.0,0.0,0.0,0.0,0.0,0.0},
-        {0.0,0.0,0.0,0.0,0.0,0.0},
-        {0.0,0.0,0.0,0.0,0.0,0.0},
-        {0.0,0.0,0.0,0.0,0.0,0.0}
-    }; 
-    for (int i = 0; i < N; i++) {
-		for (int j = 0; j < N; j++)
-			c_e[i][j]= inv_se[i][j];
-    };
+    // ============ Solving S_e's inverse ==========================================
+    auto beg9 = high_resolution_clock::now();
+    MatrixXd c_e(6,6);
+    c_e << S_e.inverse();
+    auto end9 = high_resolution_clock::now();
 
+    auto duration9 = duration_cast<microseconds>(end9 - beg9);
+    // Displaying the elapsed time
+    MyFile << "S_e inverse calc (c_e): Elapsed Time: " << std::setw(5) << std::setprecision(5) << duration9.count()*1e-6 << " sec"<<std::endl;
+    MyFile <<  "\nc_e: \n" << c_e << std::endl;
+    // ================================================================
+    
+    MyFile <<  "\nS_i: \n" << S_i << std::endl;
     // Calculate Biot tensor (B_ij = delta_ij - c_e*S_i)
-    double S_i_psum[6] = {0.0,0.0,0.0,0.0,0.0,0.0};
-    for (int i=0; i<6; i++){
+    VectorXd S_i_psum(6);
+    /*for (int i=0; i<6; i++){
         for (int j=0; j<3; j++){
-            S_i_psum[i] += S_i[i][j];
+            S_i_psum(i) += S_i.row(j).sum();
         }
-    }
+    }*/
+    for (int i=0; i<6; i++){
+        S_i_psum(i) = S_i.row(i).head(3).sum();}
+    /*S_i_psum(0) = S_i.row(0).head(3).sum();
+    S_i_psum(1) = S_i.row(1).head(3).sum();
+    S_i_psum(2) = S_i.row(2).head(3).sum();
+    S_i_psum(3) = S_i.row(3).head(3).sum();
+    S_i_psum(4) = S_i.row(4).head(3).sum();
+    S_i_psum(5) = S_i.row(5).head(3).sum();*/
+    MyFile <<  "\nS_i_psum: \n" << S_i_psum << std::endl;
+    
 
     // dot product CS in voigt
-    double CS_V[6] = {0.0, 0.0, 0.0, 0.0, 0.0, 0.0};
-    for (int i=0; i<6; i++){
+    VectorXd CS_V(6);
+    // ============ CS_V calc ==========================================
+    auto beg11 = high_resolution_clock::now();
+    /*for (int i=0; i<6; i++){
         for (int j=0; j<3; j++){
-            CS_V[i] += c_e[i][j]*S_i_psum[j];
+            CS_V(i) += c_e(i,j)*S_i_psum(j);
         }
-    }
+    }*/
+    //CS_V = c_e.leftCols(3).dot(S_i_psum);
+    CS_V = c_e.leftCols(3) * S_i_psum.head(3);
+    auto end11 = high_resolution_clock::now();
+
+    auto duration11 = duration_cast<microseconds>(end11 - beg11);
+    // Displaying the elapsed time
+    MyFile << "CS_V: Elapsed Time: " << std::setw(5) << std::setprecision(5) << duration11.count()*1e-6 << " sec"<<std::endl;
+    MyFile <<  "\nCS_V: \n" << CS_V << std::endl;
+    // ================================================================
+
+
 
     // CS voigt to full
-    double CS[3][3] = {
+    /*double CS[3][3] = {
         {CS_V[0],CS_V[5],CS_V[4]},
         {CS_V[5],CS_V[1],CS_V[3]},
         {CS_V[4], CS_V[3],CS_V[2]}
-        };
+        };*/
+    MatrixXd CS(3,3);
+    CS <<
+    CS_V(0), CS_V(5), CS_V(4),
+    CS_V(5), CS_V(1), CS_V(3),
+    CS_V(4), CS_V(3), CS_V(2);
+
+    MyFile <<  "\nCS: \n" << CS << std::endl;
 
     //std::cout << "\nCS (dot prod): \n";
 	/*for (int i = 0; i < 3; i++) {
@@ -330,46 +349,40 @@ static void emt_elastic(double bulkm, double shearm, const double* de, double* s
 
     // solve for biot tensor
     // B_ij = Kronecker - CS
-    double Kronecker_delta[3][3] = {
-        {1.0,0.0,0.0},
-        {0.0,1.0,0.0},
-        {0.0,0.0,1.0}
-        };
-    double Biot[3][3] = {
-        {0.0,0.0,0.0},
-        {0.0,0.0,0.0},
-        {0.0,0.0,0.0}
-        };
-    for (int i=0; i<3; i++){
-        for (int j=0; j<3; j++){
-            Biot[i][j] = Kronecker_delta[i][j] - CS[i][j];
-        }
-    }
-    
-    //std::cout << "\nBiot Tensor: \n";
-	/*for (int i = 0; i < 3; i++) {
-		for (int j = 0; j < 3; j++)
-        {
-		    std::cout << Biot[i][j] << " ";
-        }
-	    std::cout << endl;
-        }*/
-    
+    MatrixXd Kronecker_delta(3,3);
+    Kronecker_delta <<
+        1.0,0.0,0.0,
+        0.0,1.0,0.0,
+        0.0,0.0,1.0;
+    MyFile <<  "\nKronecker_delta: \n" << Kronecker_delta << std::endl;
+
+    MatrixXd Biot(3,3);
+    // ============ Biot calc ==========================================
+    auto beg12 = high_resolution_clock::now();
+    Biot << Kronecker_delta - CS;
+    auto end12 = high_resolution_clock::now();
+
+    auto duration12 = duration_cast<microseconds>(end12 - beg12);
+    // Displaying the elapsed time
+    MyFile << "Biot: Elapsed Time: " << std::setw(5) << std::setprecision(5) << duration12.count()*1e-6 << " sec"<<std::endl;
+    MyFile <<  "\nBiot: \n" << Biot << std::endl;
+    // ================================================================
+
 
 
     // mult. B w (neg) P_fl = stress correction term. Convert to voigt and add to s[i] AFTER last s[i] math
-    double stress_corr[3][3] = {
-        {0.0,0.0,0.0},
-        {0.0,0.0,0.0},
-        {0.0,0.0,0.0}
-        };
+    MatrixXd stress_corr(3,3);
+    // ============ stress_corr[i][j] ==========================================
+    auto beg13 = high_resolution_clock::now();
+    stress_corr = -pf_z * Biot;
+    auto end13 = high_resolution_clock::now();
 
-    for (int i=0; i<3; i++){
-        for (int j=0; j<3; j++){
-            //stress_corr[i][j] = -P_fl * Biot[i][j];
-            stress_corr[i][j] = -pf_z * Biot[i][j];
-        }
-    }
+    auto duration13 = duration_cast<microseconds>(end13 - beg13);
+    // Displaying the elapsed time
+    MyFile << "stress_corr[i][j]: Elapsed Time: " << std::setw(5) << std::setprecision(5) << duration13.count()*1e-6 << " sec"<<std::endl;
+    MyFile <<  "\nstress_corr: \n" << stress_corr << std::endl;
+    // ================================================================
+
     //cout << "\npf_z: " << pf_z << "\n";
 
     //std::cout << "\nstress_corr: \n";
@@ -380,17 +393,18 @@ static void emt_elastic(double bulkm, double shearm, const double* de, double* s
     
     double stress_corr_V[NSTR] = {0.0};
     for (int i = 0; i < NDIMS; i++)
-        stress_corr_V[i] = stress_corr[i][i];
+        stress_corr_V[i] = stress_corr(i,i);
     if( NDIMS == 2)
-        stress_corr_V[2] = stress_corr[0][1];
+        stress_corr_V[2] = stress_corr(0,1);
     else if( NDIMS == 3) {
-        stress_corr_V[3] = stress_corr[1][2];
-        stress_corr_V[4] = stress_corr[0][2];
-        stress_corr_V[5] = stress_corr[0][1];
+        stress_corr_V[3] = stress_corr(1,2);
+        stress_corr_V[4] = stress_corr(0,2);
+        stress_corr_V[5] = stress_corr(0,1);
     }
 
 // add correcting term to current intact stress (in voigt notation) to get effective stress
-
+    // ============ incremental stress update ==========================================
+    auto beg14 = high_resolution_clock::now();
     for (int i=0; i<NDIMS; ++i){
         //std::cout << "\n i = " << i <<" diagonal: pre\n" << " s[i]: " << s[i] << " \n";
         //std::cout << " de[i]: " << de[i] << " \n";
@@ -406,10 +420,18 @@ static void emt_elastic(double bulkm, double shearm, const double* de, double* s
         s[i] += 2 * shearm * de[i] + stress_corr_V[i]; //isotropic, linear elastic stress update. Correction term should be added to this
         //std::cout << "off diagonal: post\n" << s[i] << " \n";
     }
-    //std::cout << "\nstress update: \n";
-	/*for (int i = 0; i < NSTR; i++)
-    {   std::cout << s[i] << " ";
-	std::cout << endl;}*/
+    /*std::cout << "\nstress update: \n";
+	for (int i = 0; i < NSTR; i++)
+       std::cout << s[i] << " ";
+	std::cout << std::endl;*/
+    auto end14 = high_resolution_clock::now();
+
+    auto duration14 = duration_cast<microseconds>(end14 - beg14);
+    // Displaying the elapsed time
+    MyFile << "update s[i]: Elapsed Time: " << std::setw(5) << std::setprecision(5) << duration14.count()*1e-6 << " sec"<<std::endl;
+    // ================================================================
+
+    MyFile.close();
     
 }
 
