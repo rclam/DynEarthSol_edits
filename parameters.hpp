@@ -193,6 +193,9 @@ struct Mat {
     double_vec cohesion0, cohesion1;
     double_vec friction_angle0, friction_angle1;
     double_vec dilation_angle0, dilation_angle1;
+
+    // emt (anisotropy-related)
+    double_vec initial_crack_normal; //angle of vector normal to crack (meas. from horiz. ax. CCW)
 };
 
 struct Markers {

@@ -175,6 +175,8 @@ namespace {
 
 VectorBase* VectorBase::create(const double_vec &a, int len)
 {
+    /*std::cout << "\na.size(): " << a.size() << std::endl;
+    std::cout << "\nlen() \n" << len << std::endl;*/
     if (static_cast<int>(a.size()) == len)
         return new Vector(a, len);
     if (a.size() == 1 && len != 1)
@@ -221,7 +223,9 @@ MatProps::MatProps(const Param& p, const Variables& var) :
     alpha = VectorBase::create(p.mat.alpha, nmat);
     bulk_modulus = VectorBase::create(p.mat.bulk_modulus, nmat);
     shear_modulus = VectorBase::create(p.mat.shear_modulus, nmat);
-    visc_exponent = VectorBase::create(p.mat.visc_exponent, nmat);
+    //std::cout << "\nCreating initial_crack_normal" << std::endl;
+    //theta_normal = VectorBase::create(p.mat.initial_crack_normal, nmat);
+    initial_crack_normal = VectorBase::create(p.mat.initial_crack_normal, nmat);
     visc_coefficient = VectorBase::create(p.mat.visc_coefficient, nmat);
     visc_activation_energy = VectorBase::create(p.mat.visc_activation_energy, nmat);
     heat_capacity = VectorBase::create(p.mat.heat_capacity, nmat);
@@ -243,6 +247,8 @@ MatProps::~MatProps()
     delete alpha;
     delete bulk_modulus;
     delete shear_modulus;
+    //delete theta_normal;
+    delete initial_crack_normal;
     delete visc_exponent;
     delete visc_coefficient;
     delete visc_activation_energy;
@@ -268,6 +274,15 @@ double MatProps::bulkm(int e) const
 double MatProps::shearm(int e) const
 {
     return harmonic_mean(*shear_modulus, elemmarkers[e]);
+}
+
+/*double MatProps::initial_crack_normal(int e) const
+{
+    return harmonic_mean(*theta_normal, elemmarkers[e]);
+}*/
+double MatProps::theta_normal(int e) const
+{
+    return harmonic_mean(*initial_crack_normal, elemmarkers[e]);
 }
 
 
