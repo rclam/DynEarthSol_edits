@@ -284,7 +284,7 @@ int main(int argc, const char* argv[])
     //std::ofstream MyFile("filename.txt");
     //std::ofstream MyFile("elapsed_time_elastoplastic.txt");
     //std::ofstream MyFile("DES_elapsed_time_aniso_p01.txt");
-    std::ofstream MyFile("DES_elapsed_time_aniso_p00.txt");
+    std::ofstream MyFile("DES_elapsed_time_aniso_p001.txt");
 
     auto beg0 = high_resolution_clock::now();
     double start_time = 0;

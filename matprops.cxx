@@ -226,6 +226,7 @@ MatProps::MatProps(const Param& p, const Variables& var) :
     //std::cout << "\nCreating initial_crack_normal" << std::endl;
     //theta_normal = VectorBase::create(p.mat.initial_crack_normal, nmat);
     initial_crack_normal = VectorBase::create(p.mat.initial_crack_normal, nmat);
+    emt_crack_density = VectorBase::create(p.mat.emt_crack_density, nmat);
     visc_exponent = VectorBase::create(p.mat.visc_exponent, nmat);
     visc_coefficient = VectorBase::create(p.mat.visc_coefficient, nmat);
     visc_activation_energy = VectorBase::create(p.mat.visc_activation_energy, nmat);
@@ -250,6 +251,7 @@ MatProps::~MatProps()
     delete shear_modulus;
     //delete theta_normal;
     delete initial_crack_normal;
+    delete emt_crack_density;
     delete visc_exponent;
     delete visc_coefficient;
     delete visc_activation_energy;
@@ -284,6 +286,11 @@ double MatProps::shearm(int e) const
 double MatProps::theta_normal(int e) const
 {
     return harmonic_mean(*initial_crack_normal, elemmarkers[e]);
+}
+
+double MatProps::emt_rho(int e) const
+{
+    return harmonic_mean(*emt_crack_density, elemmarkers[e]);
 }
 
 

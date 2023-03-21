@@ -418,6 +418,8 @@ static void declare_parameters(po::options_description &cfg,
          "Shear modulus of the materials '[d0, d1, d2, ...]' (in Pa)")
         ("mat.initial_crack_normal", po::value<std::string>()->default_value("[0]"),
         "Initial angle (in degrees) of vector normal to imposed EMT crack, measured CCW from horizontal axis")
+        ("mat.emt_crack_density", po::value<std::string>()->default_value("[0.0]"),
+        "(EMT rheology) initial prescribed crack density")
 
         ("mat.visc_exponent", po::value<std::string>()->default_value("[3.05]"),
          "Exponents of non-linear viscosity of the materials'[d0, d1, d2, ...]'")
@@ -786,6 +788,7 @@ static void validate_parameters(const po::variables_map &vm, Param &p)
         get_numbers(vm, "mat.bulk_modulus", p.mat.bulk_modulus, p.mat.nmat, 1);
         get_numbers(vm, "mat.shear_modulus", p.mat.shear_modulus, p.mat.nmat, 1);
         get_numbers(vm, "mat.initial_crack_normal", p.mat.initial_crack_normal, p.mat.nmat, 1);
+        get_numbers(vm, "mat.emt_crack_density", p.mat.emt_crack_density, p.mat.nmat, 1);
 
         get_numbers(vm, "mat.visc_exponent", p.mat.visc_exponent, p.mat.nmat, 1);
         get_numbers(vm, "mat.visc_coefficient", p.mat.visc_coefficient, p.mat.nmat, 1);

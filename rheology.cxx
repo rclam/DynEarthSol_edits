@@ -129,7 +129,7 @@ static void elastic(double bulkm, double shearm, const double* de, double* s)
         s[i] += 2 * shearm * de[i];
 }
 
-static void emt_elastic(double bulkm, double shearm, double theta_normal, const double* de, double* s, double pf_z) 
+static void emt_elastic(double bulkm, double shearm, double theta_normal, double emt_rho, const double* de, double* s, double pf_z) 
 // TO DO: incorp. theta_normal like how bulkm/shearm is implemented (e.g. avg. for different materials)
 // TO DO: hydrostatic pore fluid pressure optional in cfg file
 {
@@ -193,11 +193,11 @@ static void emt_elastic(double bulkm, double shearm, double theta_normal, const 
     // ================================================================
 
     // scalar crack density
-    double rho = 0.001;
+    //double rho = 0.001;
     // normal vector
     //!!! check theta orientation
-    double theta = 0.0; //30 degree dip
-    double th_rad = ((90+theta)-90)*(M_PI/180); // degree in radian, Use cmath PI
+    //double theta = 0.0; //30 degree dip
+    double th_rad = ((90+theta_normal)-90)*(M_PI/180); // degree in radian, Use cmath PI
     double a_n[3] = {cos(th_rad), sin(th_rad), 0.0};
     // crack density tensor alpha
     double a_alpha[3][3] = {
@@ -209,7 +209,7 @@ static void emt_elastic(double bulkm, double shearm, double theta_normal, const 
     auto beg4 = high_resolution_clock::now();
     for (int i=0; i<3; i++){
         for (int j=0; j<3; j++){
-            a_alpha[i][j] = rho*a_n[i]*a_n[j]; //tensor product of normal tensor
+            a_alpha[i][j] = emt_rho*a_n[i]*a_n[j]; //tensor product of normal tensor
         }
     }
     auto end4 = high_resolution_clock::now();
@@ -621,11 +621,11 @@ static void elasto_plastic(double bulkm, double shearm,
     }
 }
 
-static void emt(double bulkm, double shearm, double theta_normal,
+static void emt(double bulkm, double shearm, double theta_normal, double emt_rho,
                            double amc, double anphi, double anpsi,
                            double hardn, double ten_max,
                            const double* de, double& depls, double* s,
-                           int &failure_mode, double pf_z) //initial_crack_normal
+                           int &failure_mode, double pf_z)
 {
     /* Elasto-plasticity (Mohr-Coulomb criterion)
      *
@@ -636,7 +636,7 @@ static void emt(double bulkm, double shearm, double theta_normal,
      */
 
     // elastic trial stress
-    emt_elastic(bulkm, shearm, theta_normal, de, s, pf_z); // rename to emt_elastic *** include double P_fl=50e+06
+    emt_elastic(bulkm, shearm, theta_normal, emt_rho, de, s, pf_z); // rename to emt_elastic *** include double P_fl=50e+06
     depls = 0;
     failure_mode = 0;
 
@@ -1078,6 +1078,7 @@ void update_stress(const Variables& var, tensor_t& stress,
                 double shearm = var.mat->shearm(e);
                 //double initial_crack_normal = var.mat->initial_crack_normal(e);
                 double theta_normal = var.mat->theta_normal(e);
+                double emt_rho = var.mat->emt_rho(e);
                 double amc, anphi, anpsi, hardn, ten_max;
                 var.mat->plastic_props(e, plstrain[e],
                                        amc, anphi, anpsi, hardn, ten_max);
@@ -1087,11 +1088,11 @@ void update_stress(const Variables& var, tensor_t& stress,
                 if (var.mat->is_plane_strain) {
                     //elasto_plastic2d(bulkm, shearm, amc, anphi, anpsi, hardn, ten_max,
                     //                 de, depls, s, syy, failure_mode);
-                    emt(bulkm, shearm, theta_normal, amc, anphi, anpsi, hardn, ten_max,
+                    emt(bulkm, shearm, theta_normal, emt_rho, amc, anphi, anpsi, hardn, ten_max,
                                    de, depls, s, failure_mode, pf_z);
                 }
                 else {
-                    emt(bulkm, shearm, theta_normal, amc, anphi, anpsi, hardn, ten_max,
+                    emt(bulkm, shearm, theta_normal, emt_rho, amc, anphi, anpsi, hardn, ten_max,
                                    de, depls, s, failure_mode, pf_z);
                 }
                 plstrain[e] += depls;
