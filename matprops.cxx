@@ -226,6 +226,7 @@ MatProps::MatProps(const Param& p, const Variables& var) :
     //std::cout << "\nCreating initial_crack_normal" << std::endl;
     //theta_normal = VectorBase::create(p.mat.initial_crack_normal, nmat);
     initial_crack_normal = VectorBase::create(p.mat.initial_crack_normal, nmat);
+    visc_exponent = VectorBase::create(p.mat.visc_exponent, nmat);
     visc_coefficient = VectorBase::create(p.mat.visc_coefficient, nmat);
     visc_activation_energy = VectorBase::create(p.mat.visc_activation_energy, nmat);
     heat_capacity = VectorBase::create(p.mat.heat_capacity, nmat);
