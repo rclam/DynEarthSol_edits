@@ -282,9 +282,8 @@ int main(int argc, const char* argv[])
 {
     // Create and open a text file
     //std::ofstream MyFile("filename.txt");
-    //std::ofstream MyFile("elapsed_time_elastoplastic.txt");
-    //std::ofstream MyFile("DES_elapsed_time_aniso_p01.txt");
-    std::ofstream MyFile("DES_elapsed_time_aniso_p001.txt");
+    //std::ofstream MyFile("DES_NEW_deg00p00.txt");
+    std::ofstream MyFile("Nsight_updated_deg45p01.txt");
 
     auto beg0 = high_resolution_clock::now();
     double start_time = 0;

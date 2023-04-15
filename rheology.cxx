@@ -130,12 +130,11 @@ static void elastic(double bulkm, double shearm, const double* de, double* s)
 }
 
 static void emt_elastic(double bulkm, double shearm, double theta_normal, double emt_rho, const double* de, double* s, double pf_z) 
-// TO DO: incorp. theta_normal like how bulkm/shearm is implemented (e.g. avg. for different materials)
 // TO DO: hydrostatic pore fluid pressure optional in cfg file
 {
+    //auto beg00 = high_resolution_clock::now();
     // Create and open a text file
-    //std::ofstream MyFile("rheol_elapsed_time_emt_iso.txt");
-    std::ofstream MyFile("rheol_elapsed_time_eigen_deg00p001.txt");
+    std::ofstream MyFile("rheol_NEW_deg00p00.txt");
 
     /*cout << "\ncurrent stress: \n";
 	for (int i = 0; i < NDIMS; i++)
@@ -147,14 +146,26 @@ static void emt_elastic(double bulkm, double shearm, double theta_normal, double
     {   std::cout << de[i] << " ";
 	std::cout << endl;}*/
 
+    /*std::cout << "\ncurrent crack density (emt_rho): \n";
+	for (int i = 0; i < NDIMS; i++)
+    {   std::cout << emt_rho << " ";
+	std::cout << std::endl;}
+
+    if (emt_rho != 0.0){
+        std::cout << "\ncurrent crack angle norm. (\u0398): \n";
+        for (int i = 0; i < NDIMS; i++)
+    {       std::cout << "\ncurrent crack angle norm. (\u0398): " << theta_normal << " ";
+	    std::cout << std::endl;
+    }
+    }
+    */
+    
+
     /* increment the stress s according to the incremental strain de */
     double lambda = bulkm - 2. /3 * shearm;
     double dev = trace(de);
-    //double mu = 0.5*(3*(bulkm - lambda));
     double E0 = shearm * ((3*lambda + 2*shearm)/(lambda + shearm)); // Young's Mod
     double v = lambda / (2*(lambda + shearm));          // poisson ratio
-
-    /*cout << "\nSolving for intact stiffness\n" ;*/
 
     // intact rock stiffness c_i
     /*MatrixXd c_i(6,6);
@@ -164,17 +175,9 @@ static void emt_elastic(double bulkm, double shearm, double theta_normal, double
         lambda, lambda, lambda + 2*shearm, 0.0, 0.0, 0.0,
         0.0, 0.0, 0.0, shearm, 0.0, 0.0,
         0.0, 0.0, 0.0, 0.0, shearm, 0.0,
-        0.0, 0.0, 0.0, 0.0, 0.0, shearm;
-
-    MyFile <<  "\nc_i: \n" << c_i << std::endl;*/
-
-    //std::cout << "Beginning inverse calculations\n" ;
-    //cout << "Creating empty inverse\n" ;
-	//double inv_ci[6][6]; // To store inverse of c_i[][]
+        0.0, 0.0, 0.0, 0.0, 0.0, shearm;*/
 
     // ============ Solving for S_i ==========================================
-    auto beg2 = high_resolution_clock::now();
-    //cout <<  "\nHere is c_i.inverse():   \n" << c_i.inverse() <<"\n"  << endl;
     MatrixXd S_i(6,6); // intact rock compliance S_i
     S_i <<
         1/E0, -v/E0, -v/E0, 0.0, 0.0, 0.0,
@@ -183,20 +186,10 @@ static void emt_elastic(double bulkm, double shearm, double theta_normal, double
         0.0, 0.0, 0.0, 1/shearm, 0.0, 0.0,
         0.0, 0.0, 0.0, 0.0, 1/shearm, 0.0,
         0.0, 0.0, 0.0, 0.0, 0.0, 1/shearm;
-    auto end2 = high_resolution_clock::now();
     MyFile <<  "\nS_i: \n" << S_i << std::endl;
 
-    auto duration2 = duration_cast<microseconds>(end2 - beg2);
-    // Displaying the elapsed time
-    //std::cout << "S_i -->      Elapsed Time: " << std::setw(5) << std::setprecision(5) << duration.count()*1e-6 << " sec"<<std::endl;
-    MyFile << "Intact compliance calc.: Elapsed Time: " << std::setw(5) << std::setprecision(5) << duration2.count()*1e-6 << " sec"<<std::endl;
     // ================================================================
 
-    // scalar crack density
-    //double rho = 0.001;
-    // normal vector
-    //!!! check theta orientation
-    //double theta = 0.0; //30 degree dip
     double th_rad = ((90+theta_normal)-90)*(M_PI/180); // degree in radian, Use cmath PI
     double a_n[3] = {cos(th_rad), sin(th_rad), 0.0};
     // crack density tensor alpha
@@ -206,25 +199,34 @@ static void emt_elastic(double bulkm, double shearm, double theta_normal, double
         {0.0,0.0,0.0}
         };
     // ============ Solving Alpha Tensor ==========================================
-    auto beg4 = high_resolution_clock::now();
+    //auto beg4 = high_resolution_clock::now();
     for (int i=0; i<3; i++){
         for (int j=0; j<3; j++){
             a_alpha[i][j] = emt_rho*a_n[i]*a_n[j]; //tensor product of normal tensor
         }
     }
-    auto end4 = high_resolution_clock::now();
+    //auto end4 = high_resolution_clock::now();
+    MyFile <<  "\n\u03B1 (crack density tensor): " << std::endl;
+    for (int i = 0; i < 3; i++) {
+		MyFile << a_alpha[0][i] << " ";}
+    MyFile << "\n"; 
+    for (int i = 0; i < 3; i++) {
+		MyFile << a_alpha[1][i] << " ";}
+    MyFile << "\n"; 
+    for (int i = 0; i < 3; i++) {
+		MyFile << a_alpha[2][i] << " ";}
+	//MyFile << endl;}
 
-    auto duration4 = duration_cast<microseconds>(end4 - beg4);
+    //auto duration4 = duration_cast<microseconds>(end4 - beg4);
     // Displaying the elapsed time
-    MyFile << "Alpha (crack dens. tensor): Elapsed Time: " << std::setw(5) << std::setprecision(5) << duration4.count()*1e-6 << " sec"<<std::endl;
-    //MyFile <<  "\na_alpha: \n" << a_alpha << std::endl;
+    //MyFile << "Alpha (crack dens. tensor): Elapsed Time: " << std::setw(5) << std::setprecision(5) << duration4.count()*1e-6 << " sec"<<std::endl;
     // ================================================================
 
 
     // correction term (S_voigt): delta_s_a * delta_s_b
     double delta_s_a = (8.0*(1.0-pow(v,2)))/(3.0*E0*(2.0-v));
     // ============ Solving Correction term partial ==========================================
-    auto beg5 = high_resolution_clock::now();
+    //auto beg5 = high_resolution_clock::now();
     MatrixXd delta_s_b(6,6);
     delta_s_b << 
         4*a_alpha[0][0], 0.0, 0.0, 0.0, 2*a_alpha[0][2], 2*a_alpha[0][1], 
@@ -233,47 +235,38 @@ static void emt_elastic(double bulkm, double shearm, double theta_normal, double
         0.0, 2*a_alpha[2][1], 2*a_alpha[1][2], a_alpha[1][1] + a_alpha[2][2], a_alpha[1][0], a_alpha[2][0], 
         2*a_alpha[2][0], 0.0, 2*a_alpha[0][2], a_alpha[0][1], a_alpha[0][0] + a_alpha[2][2], a_alpha[2][1], 
         2*a_alpha[1][0], 2*a_alpha[0][1], 0.0, a_alpha[0][2], a_alpha[1][2], a_alpha[0][0]+a_alpha[1][1];
-    auto end5 = high_resolution_clock::now();
+    //auto end5 = high_resolution_clock::now();
 
-    auto duration5 = duration_cast<microseconds>(end5 - beg5);
+    //auto duration5 = duration_cast<microseconds>(end5 - beg5);
     // Displaying the elapsed time
-    MyFile << "delta_s_b calc: Elapsed Time: " << std::setw(5) << std::setprecision(5) << duration5.count()*1e-6 << " sec"<<std::endl;
-    MyFile <<  "\nS_i: \n" << S_i << std::endl;
+    //MyFile << "delta_s_b calc: Elapsed Time: " << std::setw(5) << std::setprecision(5) << duration5.count()*1e-6 << " sec"<<std::endl;
+    //MyFile <<  "\nS_i: \n" << S_i << std::endl;
     // ================================================================
 
 
-    //correction term
-    //double S_voigt = delta_s_a * delta_s_b; 
-    MatrixXd S_voigt(6,6);
-    S_voigt << 
-        0.0, 0.0, 0.0, 0.0, 0.0, 0.0,
-        0.0, 0.0, 0.0, 0.0, 0.0, 0.0,
-        0.0, 0.0, 0.0, 0.0, 0.0, 0.0,
-        0.0, 0.0, 0.0, 0.0, 0.0, 0.0,
-        0.0, 0.0, 0.0, 0.0, 0.0, 0.0,
-        0.0, 0.0, 0.0, 0.0, 0.0, 0.0;
-        
     
-    // ============ Solving S_voigt ==========================================
-    auto beg6 = high_resolution_clock::now();
-    S_voigt << delta_s_a * delta_s_b;
-    auto end6 = high_resolution_clock::now();
 
-    auto duration6 = duration_cast<microseconds>(end6 - beg6);
-    // Displaying the elapsed time
-    MyFile << "S_voigt calc: Elapsed Time: " << std::setw(5) << std::setprecision(5) << duration6.count()*1e-6 << " sec"<<std::endl;
+    // ============ Solving S_voigt ==========================================
+    //correction term
+    MatrixXd S_voigt(6,6);
+    //auto beg6 = high_resolution_clock::now();
+    S_voigt << delta_s_a * delta_s_b;
+    //auto end6 = high_resolution_clock::now();
+
+    //auto duration6 = duration_cast<microseconds>(end6 - beg6);
+    //MyFile << "S_voigt calc: Elapsed Time: " << std::setw(5) << std::setprecision(5) << duration6.count()*1e-6 << " sec"<<std::endl;
     MyFile <<  "\nS_voigt: \n" << S_voigt << std::endl;
     // ================================================================
 
-    MatrixXd S_e(6,6);
     // ============ Solving S_e ==========================================
-    auto beg7 = high_resolution_clock::now();
+    MatrixXd S_e(6,6);
+    //auto beg7 = high_resolution_clock::now();
     S_e << S_i + S_voigt;
-    auto end7 = high_resolution_clock::now();
+    //auto end7 = high_resolution_clock::now();
 
-    auto duration7 = duration_cast<microseconds>(end7 - beg7);
+    //auto duration7 = duration_cast<microseconds>(end7 - beg7);
     // Displaying the elapsed time
-    MyFile << "S_e calc: Elapsed Time: " << std::setw(5) << std::setprecision(5) << duration7.count()*1e-6 << " sec"<<std::endl;
+    //MyFile << "S_e calc: Elapsed Time: " << std::setw(5) << std::setprecision(5) << duration7.count()*1e-6 << " sec"<<std::endl;
     MyFile <<  "\nS_e: \n" << S_e << std::endl;
 
     // ================================================================
@@ -281,57 +274,70 @@ static void emt_elastic(double bulkm, double shearm, double theta_normal, double
 
     // New Cracked Stiffness c_e
     // ============ Solving S_e's inverse ==========================================
-    auto beg9 = high_resolution_clock::now();
-    MatrixXd c_e(6,6);
-    c_e << S_e.inverse();
-    auto end9 = high_resolution_clock::now();
+    //auto beg9 = high_resolution_clock::now();
+    //MatrixXd c_e(6,6);
+    //c_e << S_e.inverse();
+    //auto end9 = high_resolution_clock::now();
 
-    auto duration9 = duration_cast<microseconds>(end9 - beg9);
+    //auto duration9 = duration_cast<microseconds>(end9 - beg9);
     // Displaying the elapsed time
-    MyFile << "S_e inverse calc (c_e): Elapsed Time: " << std::setw(5) << std::setprecision(5) << duration9.count()*1e-6 << " sec"<<std::endl;
-    MyFile <<  "\nc_e: \n" << c_e << std::endl;
+    //MyFile << "S_e inverse calc (c_e): Elapsed Time: " << std::setw(5) << std::setprecision(5) << duration9.count()*1e-6 << " sec"<<std::endl;
+    //MyFile <<  "\nc_e: \n" << c_e << std::endl;
     // ================================================================
     
-    MyFile <<  "\nS_i: \n" << S_i << std::endl;
+    //MyFile <<  "\nS_i: \n" << S_i << std::endl;
     // Calculate Biot tensor (B_ij = delta_ij - c_e*S_i)
-    VectorXd S_i_psum(6);
+    //VectorXd S_i_psum(6);
     /*for (int i=0; i<6; i++){
         for (int j=0; j<3; j++){
             S_i_psum(i) += S_i.row(j).sum();
         }
     }*/
-    for (int i=0; i<6; i++){
-        S_i_psum(i) = S_i.row(i).head(3).sum();}
-    MyFile <<  "\nS_i_psum: \n" << S_i_psum << std::endl;
+    //for (int i=0; i<6; i++){
+    //    S_i_psum(i) = S_i.row(i).head(3).sum();}
+    //MyFile <<  "\nS_i_psum: \n" << S_i_psum << std::endl;
     
 
-    // dot product CS in voigt
-    VectorXd CS_V(6);
-    // ============ CS_V calc ==========================================
-    auto beg11 = high_resolution_clock::now();
-    /*for (int i=0; i<6; i++){
-        for (int j=0; j<3; j++){
-            CS_V(i) += c_e(i,j)*S_i_psum(j);
-        }
-    }*/
-    //CS_V = c_e.leftCols(3).dot(S_i_psum);
-    CS_V = c_e.leftCols(3) * S_i_psum.head(3);
-    auto end11 = high_resolution_clock::now();
+    MatrixXd S_klmm(3,3);
+    S_klmm <<
+    S_i(0,0)+S_i(0,1)+S_i(0,2), S_i(5,0)+S_i(5,1)+S_i(5,2), S_i(4,0)+S_i(4,1)+S_i(4,2),
+    S_i(5,0)+S_i(5,1)+S_i(5,2), S_i(1,0)+S_i(1,1)+S_i(1,2), S_i(3,0)+S_i(3,1)+S_i(3,2),
+    S_i(4,0)+S_i(4,1)+S_i(4,2), S_i(3,0)+S_i(3,1)+S_i(3,2), S_i(2,0)+S_i(2,1)+S_i(2,2);
+    MyFile <<  "\nS_klmm: \n" << S_klmm << std::endl;
 
-    auto duration11 = duration_cast<microseconds>(end11 - beg11);
-    // Displaying the elapsed time
-    MyFile << "CS_V: Elapsed Time: " << std::setw(5) << std::setprecision(5) << duration11.count()*1e-6 << " sec"<<std::endl;
-    MyFile <<  "\nCS_V: \n" << CS_V << std::endl;
+    MatrixXd C_mmkl(3,3);
+    C_mmkl = S_klmm.inverse();
+    MyFile <<  "\nC_mmkl: \n" << C_mmkl << std::endl;
+
+
+    VectorXd C_mmkl_V(6);
+    C_mmkl_V(0) = C_mmkl(0,0);
+    C_mmkl_V(1) = C_mmkl(1,1);
+    C_mmkl_V(2) = C_mmkl(2,2);
+    C_mmkl_V(3) = C_mmkl(1,2);
+    C_mmkl_V(4) = C_mmkl(0,2);
+    C_mmkl_V(5) = C_mmkl(0,1);
+    MyFile <<  "\nC_mmkl_V: \n" << C_mmkl_V << std::endl;
+
+
+    
+    // ============ CS_V calc ==========================================
+    // dot product CS in voigt
+    //VectorXd CS_V(6);
+    //auto beg11 = high_resolution_clock::now();
+    //CS_V = c_e.leftCols(3) * S_i_psum.head(3);
+    //auto end11 = high_resolution_clock::now();
+
+    //auto duration11 = duration_cast<microseconds>(end11 - beg11);
+
+    //MyFile << "CS_V: Elapsed Time: " << std::setw(5) << std::setprecision(5) << duration11.count()*1e-6 << " sec"<<std::endl;
+    //MyFile <<  "\nCS_V: \n" << CS_V << std::endl;
+
+    VectorXd CS_V(6);
+    CS_V = C_mmkl_V.transpose()*S_e;
     // ================================================================
 
-
-
     // CS voigt to full
-    /*double CS[3][3] = {
-        {CS_V[0],CS_V[5],CS_V[4]},
-        {CS_V[5],CS_V[1],CS_V[3]},
-        {CS_V[4], CS_V[3],CS_V[2]}
-        };*/
     MatrixXd CS(3,3);
     CS <<
     CS_V(0), CS_V(5), CS_V(4),
@@ -339,12 +345,6 @@ static void emt_elastic(double bulkm, double shearm, double theta_normal, double
     CS_V(4), CS_V(3), CS_V(2);
 
     MyFile <<  "\nCS: \n" << CS << std::endl;
-
-    //std::cout << "\nCS (dot prod): \n";
-	/*for (int i = 0; i < 3; i++) {
-		for (int j = 0; j < 3; j++){
-		std::cout << CS[i][j] << " ";}
-	std::cout << endl;}*/
     
 
     // solve for biot tensor
@@ -354,33 +354,33 @@ static void emt_elastic(double bulkm, double shearm, double theta_normal, double
         1.0,0.0,0.0,
         0.0,1.0,0.0,
         0.0,0.0,1.0;
-    MyFile <<  "\nKronecker_delta: \n" << Kronecker_delta << std::endl;
+    //MyFile <<  "\nKronecker_delta: \n" << Kronecker_delta << std::endl;
 
     MatrixXd Biot(3,3);
     // ============ Biot calc ==========================================
-    auto beg12 = high_resolution_clock::now();
-    Biot << Kronecker_delta - CS;
-    auto end12 = high_resolution_clock::now();
+    //auto beg12 = high_resolution_clock::now();
+    Biot << Kronecker_delta - CS.inverse();
+    //auto end12 = high_resolution_clock::now();
 
-    auto duration12 = duration_cast<microseconds>(end12 - beg12);
+    //auto duration12 = duration_cast<microseconds>(end12 - beg12);
     // Displaying the elapsed time
-    MyFile << "Biot: Elapsed Time: " << std::setw(5) << std::setprecision(5) << duration12.count()*1e-6 << " sec"<<std::endl;
+    //MyFile << "Biot: Elapsed Time: " << std::setw(5) << std::setprecision(5) << duration12.count()*1e-6 << " sec"<<std::endl;
     MyFile <<  "\nBiot: \n" << Biot << std::endl;
     // ================================================================
 
 
 
     // mult. B w (neg) P_fl = stress correction term. Convert to voigt and add to s[i] AFTER last s[i] math
-    MatrixXd stress_corr(3,3);
     // ============ stress_corr[i][j] ==========================================
-    auto beg13 = high_resolution_clock::now();
+    MatrixXd stress_corr(3,3);
+    //auto beg13 = high_resolution_clock::now();
     stress_corr = -pf_z * Biot;
-    auto end13 = high_resolution_clock::now();
+    //auto end13 = high_resolution_clock::now();
 
-    auto duration13 = duration_cast<microseconds>(end13 - beg13);
-    // Displaying the elapsed time
-    MyFile << "stress_corr[i][j]: Elapsed Time: " << std::setw(5) << std::setprecision(5) << duration13.count()*1e-6 << " sec"<<std::endl;
-    MyFile <<  "\nstress_corr: \n" << stress_corr << std::endl;
+    //auto duration13 = duration_cast<microseconds>(end13 - beg13);
+
+    //MyFile << "stress_corr[i][j]: Elapsed Time: " << std::setw(5) << std::setprecision(5) << duration13.count()*1e-6 << " sec"<<std::endl;
+    //MyFile <<  "\nstress_corr: \n" << stress_corr << std::endl;
     // ================================================================
 
     //cout << "\npf_z: " << pf_z << "\n";
@@ -404,7 +404,7 @@ static void emt_elastic(double bulkm, double shearm, double theta_normal, double
 
 // add correcting term to current intact stress (in voigt notation) to get effective stress
     // ============ incremental stress update ==========================================
-    auto beg14 = high_resolution_clock::now();
+    //auto beg14 = high_resolution_clock::now();
     for (int i=0; i<NDIMS; ++i){
         //std::cout << "\n i = " << i <<" diagonal: pre\n" << " s[i]: " << s[i] << " \n";
         //std::cout << " de[i]: " << de[i] << " \n";
@@ -424,14 +424,20 @@ static void emt_elastic(double bulkm, double shearm, double theta_normal, double
 	for (int i = 0; i < NSTR; i++)
        std::cout << s[i] << " ";
 	std::cout << std::endl;*/
-    auto end14 = high_resolution_clock::now();
+    //auto end14 = high_resolution_clock::now();
 
-    auto duration14 = duration_cast<microseconds>(end14 - beg14);
+    //auto duration14 = duration_cast<microseconds>(end14 - beg14);
     // Displaying the elapsed time
-    MyFile << "update s[i]: Elapsed Time: " << std::setw(5) << std::setprecision(5) << duration14.count()*1e-6 << " sec"<<std::endl;
+    //MyFile << "update s[i]: Elapsed Time: " << std::setw(5) << std::setprecision(5) << duration14.count()*1e-6 << " sec"<<std::endl;
     // ================================================================
 
     MyFile.close();
+    //auto end00 = high_resolution_clock::now();
+    //auto duration00 = duration_cast<microseconds>(end00 - beg00);
+    //std::cout << "Elapsed Time: " << std::setw(5) << std::setprecision(5) << duration00.count()*1e-6 << " sec"<<std::endl;
+    
+
+
     
 }
 
@@ -1085,7 +1091,17 @@ void update_stress(const Variables& var, tensor_t& stress,
                 int failure_mode;
                 double pf_z = pore_fluid_pressure(var, e);
                 //std::cerr << e <<" " << pf_z << std::endl;
-                if (var.mat->is_plane_strain) {
+                
+                if (var.mat->emt_rho(e)==0.0 && var.mat->is_plane_strain) {
+                    // use ep when no imposed cracks
+                    elasto_plastic2d(bulkm, shearm, amc, anphi, anpsi, hardn, ten_max,
+                                     de, depls, s, syy, failure_mode);
+                }
+                else if (var.mat->emt_rho(e)==0.0)  {
+                    elasto_plastic(bulkm, shearm, amc, anphi, anpsi, hardn, ten_max,
+                                   de, depls, s, failure_mode);
+                }
+                else if (var.mat->emt_rho(e)!=0.0 && var.mat->is_plane_strain) {
                     //elasto_plastic2d(bulkm, shearm, amc, anphi, anpsi, hardn, ten_max,
                     //                 de, depls, s, syy, failure_mode);
                     emt(bulkm, shearm, theta_normal, emt_rho, amc, anphi, anpsi, hardn, ten_max,
