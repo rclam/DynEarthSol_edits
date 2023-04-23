@@ -134,7 +134,7 @@ static void emt_elastic(double bulkm, double shearm, double theta_normal, double
 {
     //auto beg00 = high_resolution_clock::now();
     // Create and open a text file
-    std::ofstream MyFile("rheol_NEW_deg00p00.txt");
+    std::ofstream MyFile("rheol_FWD_deg45p01.txt");
 
     /*cout << "\ncurrent stress: \n";
 	for (int i = 0; i < NDIMS; i++)
@@ -189,6 +189,8 @@ static void emt_elastic(double bulkm, double shearm, double theta_normal, double
     MyFile <<  "\nS_i: \n" << S_i << std::endl;
 
     // ================================================================
+    MyFile <<  "\nInitial crack orientation: \n" << theta_normal << std::endl;
+    MyFile <<  "\nInitial crack density: \n" << emt_rho << std::endl;
 
     double th_rad = ((90+theta_normal)-90)*(M_PI/180); // degree in radian, Use cmath PI
     double a_n[3] = {cos(th_rad), sin(th_rad), 0.0};
@@ -275,14 +277,14 @@ static void emt_elastic(double bulkm, double shearm, double theta_normal, double
     // New Cracked Stiffness c_e
     // ============ Solving S_e's inverse ==========================================
     //auto beg9 = high_resolution_clock::now();
-    //MatrixXd c_e(6,6);
-    //c_e << S_e.inverse();
+    MatrixXd c_e(6,6);
+    c_e << S_e.inverse();
     //auto end9 = high_resolution_clock::now();
 
     //auto duration9 = duration_cast<microseconds>(end9 - beg9);
     // Displaying the elapsed time
     //MyFile << "S_e inverse calc (c_e): Elapsed Time: " << std::setw(5) << std::setprecision(5) << duration9.count()*1e-6 << " sec"<<std::endl;
-    //MyFile <<  "\nc_e: \n" << c_e << std::endl;
+    MyFile <<  "\nc_e: \n" << c_e << std::endl;
     // ================================================================
     
     //MyFile <<  "\nS_i: \n" << S_i << std::endl;
@@ -305,7 +307,15 @@ static void emt_elastic(double bulkm, double shearm, double theta_normal, double
     S_i(4,0)+S_i(4,1)+S_i(4,2), S_i(3,0)+S_i(3,1)+S_i(3,2), S_i(2,0)+S_i(2,1)+S_i(2,2);
     MyFile <<  "\nS_klmm: \n" << S_klmm << std::endl;
 
-    MatrixXd C_mmkl(3,3);
+    VectorXd S_klmm_V(6);
+    S_klmm_V(0) = S_klmm(0,0);
+    S_klmm_V(1) = S_klmm(1,1);
+    S_klmm_V(2) = S_klmm(2,2);
+    S_klmm_V(3) = S_klmm(1,2);
+    S_klmm_V(4) = S_klmm(0,2);
+    S_klmm_V(5) = S_klmm(0,1);
+
+    /*MatrixXd C_mmkl(3,3);
     C_mmkl = S_klmm.inverse();
     MyFile <<  "\nC_mmkl: \n" << C_mmkl << std::endl;
 
@@ -318,6 +328,7 @@ static void emt_elastic(double bulkm, double shearm, double theta_normal, double
     C_mmkl_V(4) = C_mmkl(0,2);
     C_mmkl_V(5) = C_mmkl(0,1);
     MyFile <<  "\nC_mmkl_V: \n" << C_mmkl_V << std::endl;
+    */
 
 
     
@@ -334,7 +345,7 @@ static void emt_elastic(double bulkm, double shearm, double theta_normal, double
     //MyFile <<  "\nCS_V: \n" << CS_V << std::endl;
 
     VectorXd CS_V(6);
-    CS_V = C_mmkl_V.transpose()*S_e;
+    CS_V = c_e*S_klmm_V;
     // ================================================================
 
     // CS voigt to full
