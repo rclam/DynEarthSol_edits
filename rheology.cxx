@@ -9,7 +9,6 @@
 #include "matprops.hpp"
 #include "rheology.hpp"
 #include "utils.hpp"
-//#include "inverse.hpp"
 #include <Eigen/Dense>
 using Eigen::MatrixXd;
 using Eigen::VectorXd;
@@ -192,7 +191,7 @@ static void emt_elastic(double bulkm, double shearm, double theta_normal, double
     MyFile <<  "\nInitial crack orientation: \n" << theta_normal << std::endl;
     MyFile <<  "\nInitial crack density: \n" << emt_rho << std::endl;
 
-    double th_rad = ((90+theta_normal)-90)*(M_PI/180); // degree in radian, Use cmath PI
+    double th_rad = ((90-theta_normal)+90)*(M_PI/180); // degree in radian, Use cmath PI
     double a_n[3] = {cos(th_rad), sin(th_rad), 0.0};
     // crack density tensor alpha
     double a_alpha[3][3] = {
@@ -370,7 +369,8 @@ static void emt_elastic(double bulkm, double shearm, double theta_normal, double
     MatrixXd Biot(3,3);
     // ============ Biot calc ==========================================
     //auto beg12 = high_resolution_clock::now();
-    Biot << Kronecker_delta - CS.inverse();
+    //Biot << Kronecker_delta - CS.inverse();
+    Biot << Kronecker_delta - CS;
     //auto end12 = high_resolution_clock::now();
 
     //auto duration12 = duration_cast<microseconds>(end12 - beg12);
