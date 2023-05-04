@@ -280,12 +280,7 @@ void isostasy_adjustment(const Param &param, Variables &var)
 
 int main(int argc, const char* argv[])
 {
-    // Create and open a text file
-    //std::ofstream MyFile("filename.txt");
-    //std::ofstream MyFile("DES_NEW_deg00p00.txt");
-    std::ofstream MyFile("Nsight_updated_deg45p01.txt");
 
-    auto beg0 = high_resolution_clock::now();
     double start_time = 0;
 #ifdef USE_OMP
     start_time = omp_get_wtime();
@@ -341,60 +336,12 @@ int main(int argc, const char* argv[])
         if (param.control.has_thermal_diffusion)
             update_temperature(param, var, *var.temperature, *var.ntmp);
 
-        auto beg1 = high_resolution_clock::now();
         update_strain_rate(var, *var.strain_rate);
-        auto end1 = high_resolution_clock::now();
-
-        auto duration1 = duration_cast<microseconds>(end1 - beg1);
-        // Displaying the elapsed time
-        //std::cout << "Time steps: " << std::setw(6) << var.steps << ", Elapsed Time: " 
-        //<< std::setw(5) << std::setprecision(5) << duration.count()*1e-6 << " sec"<<std::endl;
-        MyFile << "\nupdate_strain_rate --> Time steps: " << std::setw(6) << var.steps << ", Elapsed Time: " 
-        << std::setw(5) << std::setprecision(5) << duration1.count()*1e-6 << " sec"<<std::endl;
-        // ================================================================
-        // ================================================================
-
-        auto beg2 = high_resolution_clock::now();
         compute_dvoldt(var, *var.ntmp);
-        auto end2 = high_resolution_clock::now();
-        auto duration2 = duration_cast<microseconds>(end2 - beg2);
-        // Displaying the elapsed time
-        //std::cout << "Time steps: " << std::setw(6) << var.steps << ", Elapsed Time: " 
-        //<< std::setw(5) << std::setprecision(5) << duration.count()*1e-6 << " sec"<<std::endl;
-        MyFile << "compute_dvoldt -->     Time steps: " << std::setw(6) << var.steps << ", Elapsed Time: " 
-        << std::setw(5) << std::setprecision(5) << duration2.count()*1e-6 << " sec"<<std::endl;
-        // ================================================================
-        // ================================================================
-
-        auto beg3 = high_resolution_clock::now();
         compute_edvoldt(var, *var.ntmp, *var.edvoldt);
-        auto end3 = high_resolution_clock::now();
-
-        auto duration3 = duration_cast<microseconds>(end3 - beg3);
-        // Displaying the elapsed time
-        //std::cout << "Time steps: " << std::setw(6) << var.steps << ", Elapsed Time: " 
-        //<< std::setw(5) << std::setprecision(5) << duration.count()*1e-6 << " sec"<<std::endl;
-        MyFile << "compute_edvoldt -->    Time steps: " << std::setw(6) << var.steps << ", Elapsed Time: " 
-        << std::setw(5) << std::setprecision(5) << duration3.count()*1e-6 << " sec"<<std::endl;
-        // ================================================================
-        // ================================================================
-
-
-        auto beg4 = high_resolution_clock::now();
         update_stress(var, *var.stress, *var.stressyy, *var.dpressure, *var.strain,
                       *var.plstrain, *var.delta_plstrain, *var.strain_rate);
-        auto end4 = high_resolution_clock::now();
-
-        auto duration4 = duration_cast<microseconds>(end4 - beg4);
-        // Displaying the elapsed time
-        //std::cout << "Time steps: " << std::setw(6) << var.steps << ", Elapsed Time: " 
-        //<< std::setw(5) << std::setprecision(5) << duration.count()*1e-6 << " sec"<<std::endl;
-        MyFile << "update_stress -->      Time steps: " << std::setw(6) << var.steps << ", Elapsed Time: " 
-        << std::setw(5) << std::setprecision(5) << duration4.count()*1e-6 << " sec"<<std::endl;
-        // ================================================================
-        // ================================================================
-
-        
+    
 
 	// Nodal Mixed Discretization For Stress
 	NMD_stress(var, *var.ntmp, *var.stress);
@@ -466,11 +413,7 @@ int main(int argc, const char* argv[])
         }
 
     } while (var.steps < param.sim.max_steps && var.time <= param.sim.max_time_in_yr * YEAR2SEC);
-    auto end0 = high_resolution_clock::now();
-    auto duration0 = duration_cast<microseconds>(end0 - beg0);
-    MyFile << "Total time --> " << duration0.count()*1e-6 << " sec"<<std::endl;
         
     std::cout << "Ending simulation.\n";
-    MyFile.close();
     return 0;
 }
