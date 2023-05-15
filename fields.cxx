@@ -5,6 +5,8 @@
 #include "matprops.hpp"
 #include "utils.hpp"
 #include "fields.hpp"
+#include <cmath>
+
 
 
 void allocate_variables(const Param &param, Variables& var)
@@ -31,6 +33,7 @@ void allocate_variables(const Param &param, Variables& var)
         var.strain = new tensor_t(e, 0);
         var.stress = new tensor_t(e, 0);
         var.stressyy = new double_vec(e, 0);
+        var.emt_normal_array = new tensor_t(e, 0);
     }
 
     var.ntmp= new double_vec(n);
@@ -78,6 +81,9 @@ void reallocate_variables(const Param& param, Variables& var)
 
     delete var.strain_rate;
     var.strain_rate = new tensor_t(e, 0);
+
+    delete var.emt_normal_array;
+    var.emt_normal_array = new tensor_t(e, 0);
 
     delete var.shpdx;
     delete var.shpdz;
@@ -162,7 +168,7 @@ void update_strain_rate(const Variables& var, tensor_t& strain_rate)
     double *v[NODES_PER_ELEM];
 
     #pragma omp parallel for default(none) \
-        shared(var, strain_rate, std::cerr) private(v)
+        shared(var, strain_rate) private(v)
     for (int e=0; e<var.nelem; ++e) {
         const int *conn = (*var.connectivity)[e];
         const double *shpdx = (*var.shpdx)[e];
@@ -175,19 +181,16 @@ void update_strain_rate(const Variables& var, tensor_t& strain_rate)
         // XX component
         int n = 0;
         s[n] = 0;
-        for (int i=0; i<NODES_PER_ELEM; ++i){
+        for (int i=0; i<NODES_PER_ELEM; ++i)
             s[n] += v[i][0] * shpdx[i];
-        }
-            
 
 #ifdef THREED
         const double *shpdy = (*var.shpdy)[e];
         // YY component
         n = 1;
         s[n] = 0;
-        for (int i=0; i<NODES_PER_ELEM; ++i){
+        for (int i=0; i<NODES_PER_ELEM; ++i)
             s[n] += v[i][1] * shpdy[i];
-        }
 #endif
 
         // ZZ component
@@ -197,10 +200,8 @@ void update_strain_rate(const Variables& var, tensor_t& strain_rate)
         n = 1;
 #endif
         s[n] = 0;
-        for (int i=0; i<NODES_PER_ELEM; ++i) {
+        for (int i=0; i<NODES_PER_ELEM; ++i)
             s[n] += v[i][NDIMS-1] * shpdz[i];
-            //std::cerr << e << " " << i << " " << v[i][NDIMS-1]<< " " << shpdz[i] << std::endl;
-	}
 
 #ifdef THREED
         // XY component
@@ -387,6 +388,26 @@ namespace {
         }
     }
 
+    void emt_normal_update_3d(double* a_n, double dt, double w3, double w4, double w5)
+    {
+        double n_inc[NSTR];
+
+        //double th_rad = ((90.0-theta_normal)+90.0)*(M_PI/180); // degree in radian
+        //double a_n[3] = {cos(th_rad), sin(th_rad), 0.0};
+        
+        //for (int e=0; e<var.nelem; ++e) {
+        //double *a_n = (*var.emt_normal_array)[e];
+        
+        n_inc[0] =   a_n[1] * w3 + a_n[2] * w4;
+        n_inc[1] = - a_n[0] * w3 + a_n[2] * w5;
+        n_inc[2] = - a_n[0] * w4 - a_n[1] * w5;
+        
+
+        for(int i=0; i<NSTR; ++i)  {
+            a_n[i] += dt * n_inc[i];
+        }
+    }
+
 #else
 
     void jaumann_rate_2d(double *s, double dt, double w2)
@@ -400,6 +421,24 @@ namespace {
         for(int i=0; i<NSTR; ++i)  {
             s[i] += dt * s_inc[i];
         }
+    }
+
+    void emt_normal_update_2d(const Variables &var, tensor_t &emt_normal_array, double dt, double w2)
+    {
+        double n_inc[NSTR-1];
+        
+        for (int e=0; e<var.nelem; ++e) {
+            double* a_n = (*var.emt_normal_array)[e];
+        
+            n_inc[0] =   a_n[1] * w2;
+            n_inc[1] = - a_n[0] * w2;
+            //n_inc[2] = 0;
+            
+            for(int i=0; i<(NSTR-1); ++i) {
+              emt_normal_array[e][i] += dt * n_inc[i];  
+            }
+        }
+        
     }
 
 #endif
@@ -476,6 +515,70 @@ void rotate_stress(const Variables &var, tensor_t &stress, tensor_t &strain)
 
         jaumann_rate_2d(stress[e], var.dt, w2);
         jaumann_rate_2d(strain[e], var.dt, w2);
+
+#endif
+    }
+}
+
+void update_emt_n_vec(const Variables &var, tensor_t &emt_normal_array)
+{
+    // The spin rate tensor, W, is
+    //     [  0  w3  w4] 
+    // W = [-w3   0  w5]
+    //     [-w4 -w5   0] 
+
+
+    #pragma omp parallel for default(none) \
+        shared(var, emt_normal_array)
+    for (int e=0; e<var.nelem; ++e) {
+        const int *conn = (*var.connectivity)[e];
+
+#ifdef THREED
+
+        double w3, w4, w5;
+        {
+            const double *shpdx = (*var.shpdx)[e];
+            const double *shpdy = (*var.shpdy)[e];
+            const double *shpdz = (*var.shpdz)[e];
+
+            double *v[NODES_PER_ELEM];
+            for (int i=0; i<NODES_PER_ELEM; ++i)
+                v[i] = (*var.vel)[conn[i]];
+
+            w3 = 0;
+            for (int i=0; i<NODES_PER_ELEM; ++i)
+                w3 += 0.5 * (v[i][0] * shpdy[i] - v[i][1] * shpdx[i]);
+
+            w4 = 0;
+            for (int i=0; i<NODES_PER_ELEM; ++i)
+                w4 += 0.5 * (v[i][0] * shpdz[i] - v[i][NDIMS-1] * shpdx[i]);
+
+            w5 = 0;
+            for (int i=0; i<NODES_PER_ELEM; ++i)
+                w5 += 0.5 * (v[i][1] * shpdz[i] - v[i][NDIMS-1] * shpdy[i]);
+        }
+
+        emt_normal_update_3d(var.mat->theta_normal(e), var.dt, w3, w4, w5);
+        //emt_normal_update_3d(var.emt_normal_array[e], var.dt, w3, w4, w5);
+
+#else
+
+        double w2;
+        {
+            const double *shpdx = (*var.shpdx)[e];
+            const double *shpdz = (*var.shpdz)[e];
+
+            double *v[NODES_PER_ELEM];
+            for (int i=0; i<NODES_PER_ELEM; ++i)
+                v[i] = (*var.vel)[conn[i]];
+
+            w2 = 0;
+            for (int i=0; i<NODES_PER_ELEM; ++i)
+                w2 += 0.5 * (v[i][NDIMS-1] * shpdx[i] - v[i][0] * shpdz[i]);
+        }
+
+        emt_normal_update_2d(var, emt_normal_array, var.dt, w2);
+        //emt_normal_update_2d(var, var.emt_normal_array, var.dt, w2);
 
 #endif
     }

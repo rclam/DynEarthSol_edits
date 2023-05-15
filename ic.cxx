@@ -6,6 +6,8 @@
 
 #include "ic-read-temp.hpp"
 #include "ic.hpp"
+#include <cmath>
+
 
 namespace {
 
@@ -129,6 +131,29 @@ void initial_stress_state(const Param &param, const Variables &var,
     }
 
     compensation_pressure = ref_pressure(param, -param.mesh.zlength);
+}
+
+void initial_emt_normal_array(const Param &param, const Variables &var,
+                          tensor_t &emt_normal_array)
+{
+    
+
+    // given initial theta_normal
+    const MatProps &mat = *var.mat;
+    if (mat.emt_rho(0)==0.0) {
+        //emt_normal_array = {0.0, 0.0, 0.0};
+        return;
+    }
+    const double theta_normal = mat.theta_normal(0);
+    double th_rad = ((90.0-theta_normal)+90.0)*(M_PI/180); // degree in radian, Use cmath PI
+
+    for (int e=0; e<var.nelem; ++e) {
+        const int *conn = (*var.connectivity)[e];
+
+        emt_normal_array[e][0] = cos(th_rad);
+        emt_normal_array[e][1] = sin(th_rad);
+        emt_normal_array[e][2] = 0.0;
+    }
 }
 
 double pore_fluid_pressure(const Variables &var, const int e)

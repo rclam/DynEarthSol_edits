@@ -180,6 +180,9 @@ struct Mat {
 
     double_vec bulk_modulus;
     double_vec shear_modulus;
+    // emt (anisotropy-related)
+    double_vec initial_crack_normal; //angle of vector normal to crack (meas. from horiz. ax. CCW)
+    double_vec emt_crack_density; // for rh_emt
 
     double_vec visc_exponent;
     double_vec visc_coefficient;
@@ -193,9 +196,6 @@ struct Mat {
     double_vec cohesion0, cohesion1;
     double_vec friction_angle0, friction_angle1;
     double_vec dilation_angle0, dilation_angle1;
-
-    // emt (anisotropy-related)
-    double_vec initial_crack_normal; //angle of vector normal to crack (meas. from horiz. ax. CCW)
 };
 
 struct Markers {
@@ -266,7 +266,7 @@ struct Variables {
     double_vec *ntmp;
 
     array_t *vel, *force, *coord0;
-    tensor_t *strain_rate, *strain, *stress;
+    tensor_t *strain_rate, *strain, *stress, *emt_normal_array;
     shapefn *shpdx, *shpdy, *shpdz;
 
     MatProps *mat;

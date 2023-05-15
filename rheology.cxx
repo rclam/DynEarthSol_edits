@@ -21,6 +21,7 @@ using Eigen::VectorXd;
 #include <fstream>
 using namespace std::chrono;
 //
+#include "fields.hpp"
 
 
 
@@ -128,7 +129,7 @@ static void elastic(double bulkm, double shearm, const double* de, double* s)
         s[i] += 2 * shearm * de[i];
 }
 
-static void emt_elastic(double bulkm, double shearm, double theta_normal, double emt_rho, const double* de, double* s, double pf_z) 
+static void emt_elastic(double bulkm, double shearm, const double* a_n, double emt_rho, const double* de, double* s, double pf_z) 
 // TO DO: hydrostatic pore fluid pressure optional in cfg file
 {
 
@@ -174,7 +175,7 @@ static void emt_elastic(double bulkm, double shearm, double theta_normal, double
         0.0, 0.0, 0.0, 0.0, shearm, 0.0,
         0.0, 0.0, 0.0, 0.0, 0.0, shearm;*/
 
-    // ============ Solving for S_i ==========================================
+    // ============ intact compliance S_i ==========================================
     MatrixXd S_i{
         {1/E0, -v/E0, -v/E0, 0.0, 0.0, 0.0},
         {-v/E0, 1/E0, -v/E0, 0.0, 0.0, 0.0},
@@ -187,8 +188,8 @@ static void emt_elastic(double bulkm, double shearm, double theta_normal, double
     // ================================================================
 
 
-    double th_rad = ((90-theta_normal)+90)*(M_PI/180); // degree in radian, Use cmath PI
-    double a_n[3] = {cos(th_rad), sin(th_rad), 0.0};
+    //double th_rad = ((90-theta_normal)+90)*(M_PI/180); // degree in radian, Use cmath PI
+    //double a_n[3] = {cos(th_rad), sin(th_rad), 0.0};
     // crack density tensor alpha
     double a_alpha[3][3] = {
         {0.0,0.0,0.0},
@@ -203,9 +204,6 @@ static void emt_elastic(double bulkm, double shearm, double theta_normal, double
         }
     }
 
-
-    //auto duration4 = duration_cast<microseconds>(end4 - beg4);
-    // Displaying the elapsed time
     // ================================================================
 
 
@@ -221,43 +219,21 @@ static void emt_elastic(double bulkm, double shearm, double theta_normal, double
         {2*a_alpha[2][0], 0.0, 2*a_alpha[0][2], a_alpha[0][1], a_alpha[0][0] + a_alpha[2][2], a_alpha[2][1]}, 
         {2*a_alpha[1][0], 2*a_alpha[0][1], 0.0, a_alpha[0][2], a_alpha[1][2], a_alpha[0][0]+a_alpha[1][1]}
 };
- 
-    // ================================================================
-
-
-    
 
     // ============ Solving S_voigt ==========================================
     //correction term
     MatrixXd S_voigt(6,6);
     S_voigt << delta_s_a * delta_s_b;
-    
-    // ================================================================
 
     // ============ Solving S_e ==========================================
     MatrixXd S_e(6,6);
     S_e << S_i + S_voigt;
-    
-
-    // ================================================================
-
 
     // New Cracked Stiffness c_e
     // ============ Solving S_e's inverse ==========================================
     MatrixXd c_e(6,6);
     c_e << S_e.inverse();
  
-
-    // Calculate Biot tensor (B_ij = delta_ij - c_e*S_i)
-    //VectorXd S_i_psum(6);
-    /*for (int i=0; i<6; i++){
-        for (int j=0; j<3; j++){
-            S_i_psum(i) += S_i.row(j).sum();
-        }
-    }*/
-    //for (int i=0; i<6; i++){
-    //    S_i_psum(i) = S_i.row(i).head(3).sum();}
-    
 
     MatrixXd S_klmm{
         {S_i(0,0)+S_i(0,1)+S_i(0,2), S_i(5,0)+S_i(5,1)+S_i(5,2), S_i(4,0)+S_i(4,1)+S_i(4,2)},
@@ -273,29 +249,9 @@ static void emt_elastic(double bulkm, double shearm, double theta_normal, double
     S_klmm_V(4) = S_klmm(0,2);
     S_klmm_V(5) = S_klmm(0,1);
 
-    /*MatrixXd C_mmkl(3,3);
-    C_mmkl = S_klmm.inverse();
-
-
-    VectorXd C_mmkl_V(6);
-    C_mmkl_V(0) = C_mmkl(0,0);
-    C_mmkl_V(1) = C_mmkl(1,1);
-    C_mmkl_V(2) = C_mmkl(2,2);
-    C_mmkl_V(3) = C_mmkl(1,2);
-    C_mmkl_V(4) = C_mmkl(0,2);
-    C_mmkl_V(5) = C_mmkl(0,1);
-    */
-
-
     
     // ============ CS_V calc ==========================================
     // dot product CS in voigt
-    //VectorXd CS_V(6);
-    //auto beg11 = high_resolution_clock::now();
-    //CS_V = c_e.leftCols(3) * S_i_psum.head(3);
-    //auto end11 = high_resolution_clock::now();
-
-
     VectorXd CS_V(6);
     CS_V = c_e*S_klmm_V;
     // ================================================================
@@ -307,8 +263,6 @@ static void emt_elastic(double bulkm, double shearm, double theta_normal, double
         {CS_V(4), CS_V(3), CS_V(2)}
     };
 
-    
-
     // solve for biot tensor
     // B_ij = Kronecker - CS
     MatrixXd Kronecker_delta{
@@ -317,21 +271,13 @@ static void emt_elastic(double bulkm, double shearm, double theta_normal, double
         {0.0,0.0,1.0}
     };
 
-    MatrixXd Biot(3,3);
     // ============ Biot calc ==========================================
-    //auto beg12 = high_resolution_clock::now();
-    //Biot << Kronecker_delta - CS.inverse();
+    MatrixXd Biot(3,3);
     Biot << Kronecker_delta - CS;
-    //auto end12 = high_resolution_clock::now();
-
-    //auto duration12 = duration_cast<microseconds>(end12 - beg12);
-    // Displaying the elapsed time
     // ================================================================
 
-
-
-    // mult. B w (neg) P_fl = stress correction term. Convert to voigt and add to s[i] AFTER last s[i] math
     // ============ stress_corr[i][j] ==========================================
+    // mult. B w (neg) P_fl = stress correction term. Convert to voigt and add to s[i] AFTER last s[i] math
     MatrixXd stress_corr(3,3);
     stress_corr = -pf_z * Biot;
     
@@ -575,7 +521,7 @@ static void elasto_plastic(double bulkm, double shearm,
     }
 }
 
-static void emt(double bulkm, double shearm, double theta_normal, double emt_rho,
+static void emt(double bulkm, double shearm, const double* a_n, double emt_rho,
                            double amc, double anphi, double anpsi,
                            double hardn, double ten_max,
                            const double* de, double& depls, double* s,
@@ -590,7 +536,7 @@ static void emt(double bulkm, double shearm, double theta_normal, double emt_rho
      */
 
     // elastic trial stress
-    emt_elastic(bulkm, shearm, theta_normal, emt_rho, de, s, pf_z); // rename to emt_elastic *** include double P_fl=50e+06
+    emt_elastic(bulkm, shearm, a_n, emt_rho, de, s, pf_z); // rename to emt_elastic *** include double P_fl=50e+06
     depls = 0;
     failure_mode = 0;
 
@@ -938,19 +884,21 @@ static void elasto_plastic2d(double bulkm, double shearm,
 void update_stress(const Variables& var, tensor_t& stress,
                    double_vec& stressyy, double_vec& dpressure,
                    tensor_t& strain, double_vec& plstrain,
-                   double_vec& delta_plstrain, tensor_t& strain_rate)
+                   double_vec& delta_plstrain, tensor_t& strain_rate, tensor_t& emt_normal_array)
 {
     const int rheol_type = var.mat->rheol_type;
 
     #pragma omp parallel for default(none)                           \
         shared(var, stress, stressyy, dpressure, strain, plstrain, delta_plstrain, \
-               strain_rate, rheol_type, std::cerr)
+               strain_rate, rheol_type, emt_normal_array, std::cerr)
     for (int e=0; e<var.nelem; ++e) {
         // stress, strain and strain_rate of this element
         double* s = stress[e];
         double& syy = stressyy[e];
         double* es = strain[e];
         double* edot = strain_rate[e];
+        //double* a_n = emt_normal_array[e];
+        
 	double old_s = trace(s);
 
         // anti-mesh locking correction on strain rate
@@ -1027,11 +975,12 @@ void update_stress(const Variables& var, tensor_t& stress,
             break;
         case MatProps::rh_emt:
             {
+                //update_emt_n_vec(var, emt_normal_array[e]);
+                double* a_n = emt_normal_array[e];  //new!!
                 double depls = 0;
                 double bulkm = var.mat->bulkm(e);
                 double shearm = var.mat->shearm(e);
-                //double initial_crack_normal = var.mat->initial_crack_normal(e);
-                double theta_normal = var.mat->theta_normal(e);
+                //double theta_normal = var.mat->theta_normal(e);
                 double emt_rho = var.mat->emt_rho(e);
                 double amc, anphi, anpsi, hardn, ten_max;
                 var.mat->plastic_props(e, plstrain[e],
@@ -1039,6 +988,9 @@ void update_stress(const Variables& var, tensor_t& stress,
                 int failure_mode;
                 double pf_z = pore_fluid_pressure(var, e);
                 //std::cerr << e <<" " << pf_z << std::endl;
+                //double th_rad = ((90.0-theta_normal)+90.0)*(M_PI/180); // degree in radian, Use cmath PI
+                //double a_n[3] = {cos(th_rad), sin(th_rad), 0.0};
+                //double a_n[3] = {0.0, 0.0, 0.0};
                 
                 if (var.mat->emt_rho(e)==0.0 && var.mat->is_plane_strain) {
                     // use ep when no imposed cracks
@@ -1052,15 +1004,16 @@ void update_stress(const Variables& var, tensor_t& stress,
                 else if (var.mat->emt_rho(e)!=0.0 && var.mat->is_plane_strain) {
                     //elasto_plastic2d(bulkm, shearm, amc, anphi, anpsi, hardn, ten_max,
                     //                 de, depls, s, syy, failure_mode);
-                    emt(bulkm, shearm, theta_normal, emt_rho, amc, anphi, anpsi, hardn, ten_max,
+                    emt(bulkm, shearm, a_n, emt_rho, amc, anphi, anpsi, hardn, ten_max,
                                    de, depls, s, failure_mode, pf_z);
                 }
                 else {
-                    emt(bulkm, shearm, theta_normal, emt_rho, amc, anphi, anpsi, hardn, ten_max,
+                    emt(bulkm, shearm, a_n, emt_rho, amc, anphi, anpsi, hardn, ten_max,
                                    de, depls, s, failure_mode, pf_z);
                 }
                 plstrain[e] += depls;
                 delta_plstrain[e] = depls;
+                update_emt_n_vec(var, emt_normal_array);
             }
             break;
         case MatProps::rh_evp:

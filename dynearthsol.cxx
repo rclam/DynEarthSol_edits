@@ -102,6 +102,7 @@ void init(const Param& param, Variables& var)
     // temperature should be init'd before stress and strain
     initial_temperature(param, var, *var.temperature);
     initial_stress_state(param, var, *var.stress, *var.stressyy, *var.strain, var.compensation_pressure);
+    initial_emt_normal_array(param, var, *var.emt_normal_array);
     initial_weak_zone(param, var, *var.plstrain);
 
     phase_changes_init(param, var);
@@ -251,7 +252,7 @@ void isostasy_adjustment(const Param &param, Variables &var)
         compute_dvoldt(var, *var.ntmp);
         compute_edvoldt(var, *var.ntmp, *var.edvoldt);
         update_stress(var, *var.stress, *var.stressyy, *var.dpressure, *var.strain,
-                      *var.plstrain, *var.delta_plstrain, *var.strain_rate);
+                      *var.plstrain, *var.delta_plstrain, *var.strain_rate, *var.emt_normal_array);
         update_force(param, var, *var.force);
         update_velocity(var, *var.vel);
 
@@ -340,7 +341,7 @@ int main(int argc, const char* argv[])
         compute_dvoldt(var, *var.ntmp);
         compute_edvoldt(var, *var.ntmp, *var.edvoldt);
         update_stress(var, *var.stress, *var.stressyy, *var.dpressure, *var.strain,
-                      *var.plstrain, *var.delta_plstrain, *var.strain_rate);
+                      *var.plstrain, *var.delta_plstrain, *var.strain_rate, *var.emt_normal_array);
     
 
 	// Nodal Mixed Discretization For Stress
