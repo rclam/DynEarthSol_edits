@@ -102,6 +102,7 @@ void init(const Param& param, Variables& var)
     // temperature should be init'd before stress and strain
     initial_temperature(param, var, *var.temperature);
     initial_stress_state(param, var, *var.stress, *var.stressyy, *var.strain, var.compensation_pressure);
+    initial_emt_iso_stress(param, var, *var.emt_iso_stress, *var.stressyy, *var.strain, var.compensation_pressure);
     initial_emt_normal_array(param, var, *var.emt_normal_array);
     initial_weak_zone(param, var, *var.plstrain);
 
@@ -252,7 +253,7 @@ void isostasy_adjustment(const Param &param, Variables &var)
         compute_dvoldt(var, *var.ntmp);
         compute_edvoldt(var, *var.ntmp, *var.edvoldt);
         update_stress(var, *var.stress, *var.stressyy, *var.dpressure, *var.strain,
-                      *var.plstrain, *var.delta_plstrain, *var.strain_rate, *var.emt_normal_array);
+                      *var.plstrain, *var.delta_plstrain, *var.strain_rate, *var.emt_normal_array, *var.emt_iso_stress);
         update_force(param, var, *var.force);
         update_velocity(var, *var.vel);
 
@@ -341,16 +342,17 @@ int main(int argc, const char* argv[])
         compute_dvoldt(var, *var.ntmp);
         compute_edvoldt(var, *var.ntmp, *var.edvoldt);
         update_stress(var, *var.stress, *var.stressyy, *var.dpressure, *var.strain,
-                      *var.plstrain, *var.delta_plstrain, *var.strain_rate, *var.emt_normal_array);
+                      *var.plstrain, *var.delta_plstrain, *var.strain_rate, *var.emt_normal_array, *var.emt_iso_stress);
+        update_emt_n_vec(var, *var.emt_normal_array);
     
 
 	// Nodal Mixed Discretization For Stress
-	NMD_stress(var, *var.ntmp, *var.stress);
+	NMD_stress(var, *var.ntmp, *var.stress);  // benchmark comment out?
 
         update_force(param, var, *var.force);
         update_velocity(var, *var.vel);
         apply_vbcs(param, var, *var.vel);
-        update_mesh(param, var);
+        update_mesh(param, var);   // benchmark comment out?
 
         // elastic stress/strain are objective (frame-indifferent)
         if (var.mat->rheol_type & MatProps::rh_elastic)

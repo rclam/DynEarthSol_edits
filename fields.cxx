@@ -6,6 +6,9 @@
 #include "utils.hpp"
 #include "fields.hpp"
 #include <cmath>
+#include <Eigen/Dense>
+using Eigen::MatrixXd;
+using Eigen::VectorXd;
 
 
 
@@ -33,6 +36,7 @@ void allocate_variables(const Param &param, Variables& var)
         var.strain = new tensor_t(e, 0);
         var.stress = new tensor_t(e, 0);
         var.stressyy = new double_vec(e, 0);
+        var.emt_iso_stress = new tensor_t(e, 0);
         var.emt_normal_array = new tensor_t(e, 0);
     }
 
@@ -388,25 +392,10 @@ namespace {
         }
     }
 
-    void emt_normal_update_3d(double* a_n, double dt, double w3, double w4, double w5)
-    {
-        double n_inc[NSTR];
-
-        //double th_rad = ((90.0-theta_normal)+90.0)*(M_PI/180); // degree in radian
-        //double a_n[3] = {cos(th_rad), sin(th_rad), 0.0};
-        
-        //for (int e=0; e<var.nelem; ++e) {
-        //double *a_n = (*var.emt_normal_array)[e];
-        
-        n_inc[0] =   a_n[1] * w3 + a_n[2] * w4;
-        n_inc[1] = - a_n[0] * w3 + a_n[2] * w5;
-        n_inc[2] = - a_n[0] * w4 - a_n[1] * w5;
-        
-
-        for(int i=0; i<NSTR; ++i)  {
-            a_n[i] += dt * n_inc[i];
-        }
-    }
+    //void emt_normal_update_3d(double* a_n, double dt, double w3, double w4, double w5)
+    //{
+        // TO Do
+    //}
 
 #else
 
@@ -425,17 +414,23 @@ namespace {
 
     void emt_normal_update_2d(const Variables &var, tensor_t &emt_normal_array, double dt, double w2)
     {
-        double n_inc[NSTR-1];
+        double n_new[NSTR-1];
+        double del_theta_rad;
         
         for (int e=0; e<var.nelem; ++e) {
             double* a_n = (*var.emt_normal_array)[e];
         
-            n_inc[0] =   a_n[1] * w2;
-            n_inc[1] = - a_n[0] * w2;
-            //n_inc[2] = 0;
+            del_theta_rad = (w2 * dt); // radians 
+            
+            //n_new = rotation_matrix * a_n;
+            n_new[0] = cos(del_theta_rad)*a_n[0] - sin(del_theta_rad)*a_n[1];
+            n_new[1] = sin(del_theta_rad)*a_n[0] + cos(del_theta_rad)*a_n[1];
+            n_new[2] = 0.0;
+            
             
             for(int i=0; i<(NSTR-1); ++i) {
-              emt_normal_array[e][i] += dt * n_inc[i];  
+              //emt_normal_array[e][i] += dt * n_new[i];  
+              emt_normal_array[e][i] =  n_new[i];  
             }
         }
         
@@ -535,31 +530,7 @@ void update_emt_n_vec(const Variables &var, tensor_t &emt_normal_array)
 
 #ifdef THREED
 
-        double w3, w4, w5;
-        {
-            const double *shpdx = (*var.shpdx)[e];
-            const double *shpdy = (*var.shpdy)[e];
-            const double *shpdz = (*var.shpdz)[e];
-
-            double *v[NODES_PER_ELEM];
-            for (int i=0; i<NODES_PER_ELEM; ++i)
-                v[i] = (*var.vel)[conn[i]];
-
-            w3 = 0;
-            for (int i=0; i<NODES_PER_ELEM; ++i)
-                w3 += 0.5 * (v[i][0] * shpdy[i] - v[i][1] * shpdx[i]);
-
-            w4 = 0;
-            for (int i=0; i<NODES_PER_ELEM; ++i)
-                w4 += 0.5 * (v[i][0] * shpdz[i] - v[i][NDIMS-1] * shpdx[i]);
-
-            w5 = 0;
-            for (int i=0; i<NODES_PER_ELEM; ++i)
-                w5 += 0.5 * (v[i][1] * shpdz[i] - v[i][NDIMS-1] * shpdy[i]);
-        }
-
-        emt_normal_update_3d(var.mat->theta_normal(e), var.dt, w3, w4, w5);
-        //emt_normal_update_3d(var.emt_normal_array[e], var.dt, w3, w4, w5);
+        // TO DO
 
 #else
 
@@ -578,7 +549,6 @@ void update_emt_n_vec(const Variables &var, tensor_t &emt_normal_array)
         }
 
         emt_normal_update_2d(var, emt_normal_array, var.dt, w2);
-        //emt_normal_update_2d(var, var.emt_normal_array, var.dt, w2);
 
 #endif
     }

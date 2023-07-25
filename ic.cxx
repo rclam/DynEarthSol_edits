@@ -133,11 +133,47 @@ void initial_stress_state(const Param &param, const Variables &var,
     compensation_pressure = ref_pressure(param, -param.mesh.zlength);
 }
 
+void initial_emt_iso_stress(const Param &param, const Variables &var,
+                          tensor_t &emt_iso_stress, double_vec &stressyy, tensor_t &strain,
+                          double &compensation_pressure)
+{
+    if (param.control.gravity == 0) {
+        compensation_pressure = 0;
+        return;
+    }
+
+    // lithostatic condition for stress and strain
+    double rho = var.mat->rho(0);
+    double ks = var.mat->bulkm(0);
+
+    for (int e=0; e<var.nelem; ++e) {
+        const int *conn = (*var.connectivity)[e];
+        double zcenter = 0;
+        for (int i=0; i<NODES_PER_ELEM; ++i) {
+            zcenter += (*var.coord)[conn[i]][NDIMS-1];
+        }
+        zcenter /= NODES_PER_ELEM;
+
+        double p = ref_pressure(param, zcenter);
+        if (param.control.ref_pressure_option == 1 ||
+            param.control.ref_pressure_option == 2) {
+            ks = var.mat->bulkm(e);
+        }
+
+        for (int i=0; i<NDIMS; ++i) {
+            emt_iso_stress[e][i] = -p;
+            strain[e][i] = -p / ks / NDIMS;
+        }
+        if (param.mat.is_plane_strain)
+            stressyy[e] = -p;
+    }
+
+    compensation_pressure = ref_pressure(param, -param.mesh.zlength);
+}
+
 void initial_emt_normal_array(const Param &param, const Variables &var,
                           tensor_t &emt_normal_array)
 {
-    
-
     // given initial theta_normal
     const MatProps &mat = *var.mat;
     if (mat.emt_rho(0)==0.0) {
@@ -145,7 +181,7 @@ void initial_emt_normal_array(const Param &param, const Variables &var,
         return;
     }
     const double theta_normal = mat.theta_normal(0);
-    double th_rad = ((90.0-theta_normal)+90.0)*(M_PI/180); // degree in radian, Use cmath PI
+    double th_rad = ((90.0+theta_normal)-90.0)*(M_PI/180); // degree in radian, Use cmath PI
 
     for (int e=0; e<var.nelem; ++e) {
         const int *conn = (*var.connectivity)[e];
