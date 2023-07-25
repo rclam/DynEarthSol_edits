@@ -129,36 +129,9 @@ static void elastic(double bulkm, double shearm, const double* de, double* s)
         s[i] += 2 * shearm * de[i];
 }
 
-static void emt_elastic(double bulkm, double shearm, const double* a_n, double emt_rho, const double* de, double* s, double pf_z) 
+static void emt_elastic(double bulkm, double shearm, const double* a_n, double emt_rho, const double* de, double* s, double pf_z, double* s_iso) 
 // TO DO: hydrostatic pore fluid pressure optional in cfg file
-{
-
-
-    /*cout << "\ncurrent stress: \n";
-	for (int i = 0; i < NDIMS; i++)
-    {   std::cout << s[i] << " ";
-	std::cout << endl;}
-
-    cout << "\ncurrent strain: \n";
-	for (int i = 0; i < NDIMS; i++)
-    {   std::cout << de[i] << " ";
-	std::cout << endl;}*/
-
-    /*std::cout << "\ncurrent crack density (emt_rho): \n";
-	for (int i = 0; i < NDIMS; i++)
-    {   std::cout << emt_rho << " ";
-	std::cout << std::endl;}
-
-    if (emt_rho != 0.0){
-        std::cout << "\ncurrent crack angle norm. (\u0398): \n";
-        for (int i = 0; i < NDIMS; i++)
-    {       std::cout << "\ncurrent crack angle norm. (\u0398): " << theta_normal << " ";
-	    std::cout << std::endl;
-    }
-    }
-    */
-    
-
+{    
     /* increment the stress s according to the incremental strain de */
     double lambda = bulkm - 2. /3 * shearm;
     double dev = trace(de);
@@ -309,26 +282,29 @@ static void emt_elastic(double bulkm, double shearm, const double* a_n, double e
 // add correcting term to current intact stress (in voigt notation) to get effective stress
     // ============ incremental stress update ==========================================
     //auto beg14 = high_resolution_clock::now();
+
     for (int i=0; i<NDIMS; ++i){
         //std::cout << "\n i = " << i <<" diagonal: pre\n" << " s[i]: " << s[i] << " \n";
         //std::cout << " de[i]: " << de[i] << " \n";
         //std::cout << " stress [i]: " << 2 * shearm * de[i] + lambda * dev << std::endl;
         //std::cout << " stress_corr[i]: " << stress_corr_V[i] << " \n";
         //std::cout << " dev: " << dev << " \n";
-        s[i] += 2 * shearm * de[i] + lambda * dev + stress_corr_V[i]; //
+        //std::cout << " s_iso: " << s_iso[i] << " \n";
+        s_iso[i] += 2 * shearm * de[i] + lambda * dev;
+        s[i] = s_iso[i] + stress_corr_V[i]; //
         //std::cout << "diagonal: post \n"   << s[i] << " \n" << de[i] << " \n" << stress_corr_V[i] << " \n" << dev << " \n" ;
+        //std::cout << " diagonal: post s_iso: " << s_iso[i] << " \n";
+        //std::cout << "diagonal: post \n"   << s[i] << " \n";
         
     }
     for (int i=NDIMS; i<NSTR; ++i){
         //std::cout << "\n\noff diagonal: pre\n"   << s[i] << " \n";
-        s[i] += 2 * shearm * de[i] + stress_corr_V[i]; //isotropic, linear elastic stress update. Correction term should be added to this
+        s_iso[i] += 2 * shearm * de[i];
+        s[i] = s_iso[i] + stress_corr_V[i]; //isotropic, linear elastic stress update. Correction term should be added to this
         //std::cout << "off diagonal: post\n" << s[i] << " \n";
+        //std::cout << "\n=============== END SECTION\n";
     }
-    /*std::cout << "\nstress update: \n";
-	for (int i = 0; i < NSTR; i++)
-       std::cout << s[i] << " ";
-	std::cout << std::endl;*/
-    //auto end14 = high_resolution_clock::now();
+
 
 
 
@@ -525,7 +501,7 @@ static void emt(double bulkm, double shearm, const double* a_n, double emt_rho,
                            double amc, double anphi, double anpsi,
                            double hardn, double ten_max,
                            const double* de, double& depls, double* s,
-                           int &failure_mode, double pf_z)
+                           int &failure_mode, double pf_z, double* s_iso)
 {
     /* Elasto-plasticity (Mohr-Coulomb criterion)
      *
@@ -536,7 +512,7 @@ static void emt(double bulkm, double shearm, const double* a_n, double emt_rho,
      */
 
     // elastic trial stress
-    emt_elastic(bulkm, shearm, a_n, emt_rho, de, s, pf_z); // rename to emt_elastic *** include double P_fl=50e+06
+    emt_elastic(bulkm, shearm, a_n, emt_rho, de, s, pf_z, s_iso); // rename to emt_elastic *** include double P_fl=50e+06
     depls = 0;
     failure_mode = 0;
 
@@ -884,20 +860,20 @@ static void elasto_plastic2d(double bulkm, double shearm,
 void update_stress(const Variables& var, tensor_t& stress,
                    double_vec& stressyy, double_vec& dpressure,
                    tensor_t& strain, double_vec& plstrain,
-                   double_vec& delta_plstrain, tensor_t& strain_rate, tensor_t& emt_normal_array)
+                   double_vec& delta_plstrain, tensor_t& strain_rate, tensor_t& emt_normal_array, tensor_t& emt_iso_stress)
 {
     const int rheol_type = var.mat->rheol_type;
 
     #pragma omp parallel for default(none)                           \
         shared(var, stress, stressyy, dpressure, strain, plstrain, delta_plstrain, \
-               strain_rate, rheol_type, emt_normal_array, std::cerr)
+               strain_rate, rheol_type, emt_normal_array, emt_iso_stress, std::cerr)
     for (int e=0; e<var.nelem; ++e) {
         // stress, strain and strain_rate of this element
         double* s = stress[e];
+        double* s_iso = emt_iso_stress[e];  // new
         double& syy = stressyy[e];
         double* es = strain[e];
         double* edot = strain_rate[e];
-        //double* a_n = emt_normal_array[e];
         
 	double old_s = trace(s);
 
@@ -915,8 +891,9 @@ void update_stress(const Variables& var, tensor_t& stress,
             //std::cerr << "\n element="<<e<<" i="<<i<<" es[i]: " << es[i] << "\n";
             es[i] += edot[i] * var.dt;
             /*std::cerr << "es[i]: " << es[i] <<" de="<< edot[i]*var.dt<< "\n";
-            std::cerr << " edot[i]: " << edot[i] << "\n";
-            std::cerr << " dt[i]: " << var.dt << "\n";
+            std::cerr << " edot[i]: " << edot[i] << "\n";*/
+            /*std::cerr << " dt[i]: " << var.dt << "\n";
+            std::cerr << " a_n[i]: " << emt_normal_array[e][i] << "\n";
             std::cerr << "\n";*/
 
         }
@@ -975,12 +952,10 @@ void update_stress(const Variables& var, tensor_t& stress,
             break;
         case MatProps::rh_emt:
             {
-                //update_emt_n_vec(var, emt_normal_array[e]);
                 double* a_n = emt_normal_array[e];  //new!!
                 double depls = 0;
                 double bulkm = var.mat->bulkm(e);
                 double shearm = var.mat->shearm(e);
-                //double theta_normal = var.mat->theta_normal(e);
                 double emt_rho = var.mat->emt_rho(e);
                 double amc, anphi, anpsi, hardn, ten_max;
                 var.mat->plastic_props(e, plstrain[e],
@@ -988,9 +963,6 @@ void update_stress(const Variables& var, tensor_t& stress,
                 int failure_mode;
                 double pf_z = pore_fluid_pressure(var, e);
                 //std::cerr << e <<" " << pf_z << std::endl;
-                //double th_rad = ((90.0-theta_normal)+90.0)*(M_PI/180); // degree in radian, Use cmath PI
-                //double a_n[3] = {cos(th_rad), sin(th_rad), 0.0};
-                //double a_n[3] = {0.0, 0.0, 0.0};
                 
                 if (var.mat->emt_rho(e)==0.0 && var.mat->is_plane_strain) {
                     // use ep when no imposed cracks
@@ -1002,18 +974,16 @@ void update_stress(const Variables& var, tensor_t& stress,
                                    de, depls, s, failure_mode);
                 }
                 else if (var.mat->emt_rho(e)!=0.0 && var.mat->is_plane_strain) {
-                    //elasto_plastic2d(bulkm, shearm, amc, anphi, anpsi, hardn, ten_max,
-                    //                 de, depls, s, syy, failure_mode);
+                    // use emt when cracks imposed
                     emt(bulkm, shearm, a_n, emt_rho, amc, anphi, anpsi, hardn, ten_max,
-                                   de, depls, s, failure_mode, pf_z);
+                                   de, depls, s, failure_mode, pf_z, s_iso);
                 }
                 else {
                     emt(bulkm, shearm, a_n, emt_rho, amc, anphi, anpsi, hardn, ten_max,
-                                   de, depls, s, failure_mode, pf_z);
+                                   de, depls, s, failure_mode, pf_z, s_iso);
                 }
                 plstrain[e] += depls;
                 delta_plstrain[e] = depls;
-                update_emt_n_vec(var, emt_normal_array);
             }
             break;
         case MatProps::rh_evp:
@@ -1064,8 +1034,8 @@ void update_stress(const Variables& var, tensor_t& stress,
             break;
         }
 	dpressure[e] = trace(s) - old_s;
-        // std::cerr << "stress " << e << ": ";
-        // print(std::cerr, s, NSTR);
-        // std::cerr << '\n';
+        //std::cerr << "stress " << e << ": ";
+        //print(std::cerr, s, NSTR);
+        //std::cerr << '\n';
     }
 }
