@@ -421,10 +421,15 @@ namespace {
             double* a_n = (*var.emt_normal_array)[e];
         
             del_theta_rad = (w2 * dt); // radians 
-            
+            //std::cout << w2 << std::endl;
+            //std::cout << "\nelement: " << e << std::endl;
+            //std::cout << del_theta_rad << std::endl;
+
             //n_new = rotation_matrix * a_n;
             n_new[0] = cos(del_theta_rad)*a_n[0] - sin(del_theta_rad)*a_n[1];
+            //std::cout << "a_n[0]: " << n_new[0] << std::endl;
             n_new[1] = sin(del_theta_rad)*a_n[0] + cos(del_theta_rad)*a_n[1];
+            //std::cout << "a_n[1]: " << n_new[1] << std::endl;
             n_new[2] = 0.0;
             
             
@@ -553,4 +558,3 @@ void update_emt_n_vec(const Variables &var, tensor_t &emt_normal_array)
 #endif
     }
 }
-

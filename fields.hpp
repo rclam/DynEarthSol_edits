@@ -12,4 +12,5 @@ void update_coordinate(const Variables& var, array_t& coord);
 void rotate_stress(const Variables &var, tensor_t &stress, tensor_t &strain);
 void update_emt_n_vec(const Variables &var, tensor_t &emt_normal_array);
 
+
 #endif

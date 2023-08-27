@@ -223,8 +223,6 @@ MatProps::MatProps(const Param& p, const Variables& var) :
     alpha = VectorBase::create(p.mat.alpha, nmat);
     bulk_modulus = VectorBase::create(p.mat.bulk_modulus, nmat);
     shear_modulus = VectorBase::create(p.mat.shear_modulus, nmat);
-    //std::cout << "\nCreating initial_crack_normal" << std::endl;
-    //theta_normal = VectorBase::create(p.mat.initial_crack_normal, nmat);
     initial_crack_normal = VectorBase::create(p.mat.initial_crack_normal, nmat);
     emt_crack_density = VectorBase::create(p.mat.emt_crack_density, nmat);
     visc_exponent = VectorBase::create(p.mat.visc_exponent, nmat);
@@ -249,7 +247,6 @@ MatProps::~MatProps()
     delete alpha;
     delete bulk_modulus;
     delete shear_modulus;
-    //delete theta_normal;
     delete initial_crack_normal;
     delete emt_crack_density;
     delete visc_exponent;
@@ -279,10 +276,6 @@ double MatProps::shearm(int e) const
     return harmonic_mean(*shear_modulus, elemmarkers[e]);
 }
 
-/*double MatProps::initial_crack_normal(int e) const
-{
-    return harmonic_mean(*theta_normal, elemmarkers[e]);
-}*/
 double MatProps::theta_normal(int e) const
 {
     return harmonic_mean(*initial_crack_normal, elemmarkers[e]);
@@ -291,6 +284,7 @@ double MatProps::theta_normal(int e) const
 double MatProps::emt_rho(int e) const
 {
     return harmonic_mean(*emt_crack_density, elemmarkers[e]);
+    //return arithmetic_mean(*emt_crack_density, elemmarkers[e]);
 }
 
 

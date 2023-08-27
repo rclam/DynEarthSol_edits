@@ -282,7 +282,6 @@ void isostasy_adjustment(const Param &param, Variables &var)
 
 int main(int argc, const char* argv[])
 {
-
     double start_time = 0;
 #ifdef USE_OMP
     start_time = omp_get_wtime();

@@ -27,7 +27,6 @@ public:
 
     double bulkm(int e) const;
     double shearm(int e) const;
-    //double initial_crack_normal(int e) const;
     double theta_normal(int e) const;
     double emt_rho(int e) const;
     double visc(int e) const;
@@ -69,7 +68,6 @@ private:
 
     const VectorBase *rho0, *alpha;
     const VectorBase *bulk_modulus, *shear_modulus;
-    //const VectorBase *theta_normal;
     const VectorBase *initial_crack_normal;
     const VectorBase *emt_crack_density;
     const VectorBase *visc_exponent, *visc_coefficient, *visc_activation_energy;
