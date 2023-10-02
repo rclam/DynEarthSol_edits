@@ -190,7 +190,7 @@ void apply_vbcs(const Param &param, const Variables &var, array_t &vel)
 
     // diverging x-boundary
     #pragma omp parallel for default(none) \
-        shared(bc, var, vel)
+        shared(bc, var, vel, param)
     for (int i=0; i<var.nnode; ++i) {
 
         // fast path: skip nodes not on boundary
@@ -456,11 +456,17 @@ void apply_vbcs(const Param &param, const Variables &var, array_t &vel)
 #endif
                 break;
             case 3:
-                v[0] = 0;
+                //v[0] = 0;
+                v[0] = bc.vbc_val_z0; //new
 #ifdef THREED
                 v[1] = 0;
 #endif
                 v[NDIMS-1] = bc.vbc_val_z0;
+                break;
+            case 4:
+                v[0] = std::min(bc.vbc_val_z0, ((2.0*(*var.coord)[i][0])/param.mesh.xlength-1) * bc.vbc_val_z0);
+                v[0] = std::max(-bc.vbc_val_z0, v[0]);
+                v[NDIMS-1] = 0.0;
                 break;
             }
         }
