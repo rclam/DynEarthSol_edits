@@ -39,5 +39,5 @@
   3
 # k  xk    zk   mattype  size
   0  12e3  -5e3 0        -1  # can specify max. element size (in m^2)
-  1  50e3  -5e3 1        -1
+  1  50e3  -5e3 1        2e6
   2  84e3  -5e3 0        -1  # -1 = no upper limit on elem size
