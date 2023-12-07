@@ -9,6 +9,7 @@
 ##
 ## ndims = 3: 3D code; 2: 2D code
 ## opt = 1 ~ 3: optimized build; others: debugging build
+## openacc = 1: enable OpenACC
 ## openmp = 1: enable OpenMP
 ## useadapt = 1: use libadaptivity for mesh optimization during remeshing
 ## adaptive_time_step = 1: use adaptive time stepping technique
@@ -17,6 +18,7 @@
 
 ndims = 2
 opt = 2
+openacc = 0
 openmp = 1
 useadapt = 0
 usemmg = 0
@@ -39,7 +41,7 @@ ifeq ($(useadapt), 1)
 	CXX_BACKEND = g++
 
 	# path to vtk header files, if not in standard system location
-	VTK_INCLUDE = /home/rclam/VTK-9.2.0.rc2 #I /opt/local/include/vtk-8.1
+	VTK_INCLUDE = /opt/local/include/vtk-8.1
 
 	# path of vtk library files, if not in standard system location
 	VTK_LIBS = /opt/local/lib
@@ -48,12 +50,24 @@ ifeq ($(useadapt), 1)
 	#LIB_MPIFORTRAN = -lmpi_mpifh # OpenMPI 1.10.2. Other possibilities: -lmpifort, -lfmpich, -lmpi_f77
 	LIB_MPIFORTRAN = -lfmpich # OpenMPI 1.10.2. Other possibilities: -lmpifort, -lfmpich, -lmpi_f77
 else
-	CXX = g++-11
+	ifeq ($(openacc), 1)
+		CXX = nvc++
+		openmp = 0 # force no openmp when using openacc
+	else
+		ifeq ($(nprof), 1)
+			CXX = nvc++
+		else
+			CXX = g++
+		endif
+	endif
 	CXX_BACKEND = ${CXX}
 endif
 
+## path to cuda's base directory
+CUDA_DIR = # /cluster/nvidia/hpc_sdk/Linux_x86_64/21.2/cuda
+
 ## path to Boost's base directory, if not in standard system location
-BOOST_ROOT_DIR = /home/rclam/boost_1_75_0
+BOOST_ROOT_DIR = /Users/rclam/projects/boost_1_80_0
 
 ########################################################################
 ## Select compiler and linker flags
@@ -83,10 +97,10 @@ endif
 
 ifeq ($(useexo), 1)
 	# path to exodus header files
-	EXO_INCLUDE = ${HOME}/opt/seacas/include
+	EXO_INCLUDE = ./seacas/include
 
 	# path of exodus library files, if not in standard system location
-	EXO_LIB_DIR = ${HOME}/opt/seacas/lib
+	EXO_LIB_DIR = ./seacas/lib
 
 	EXO_CXXFLAGS = -I$(EXO_INCLUDE) -DUSEEXODUS
 	EXO_LDFLAGS = -L$(EXO_LIB_DIR) -lexodus
@@ -97,10 +111,10 @@ endif
 
 ifeq ($(usemmg), 1)
 	# path to MMG3D header files
-	MMG_INCLUDE = ${HOME}/opt/mmg/Release/include
+	MMG_INCLUDE = ./mmg/build/include
 
 	# path of MMG3D library files, if not in standard system location
-	MMG_LIB_DIR = ${HOME}/opt/mmg/Release/lib
+	MMG_LIB_DIR = ./mmg/build/lib
 
 	MMG_CXXFLAGS = -I$(MMG_INCLUDE) -DUSEMMG
 	ifeq ($(ndims), 3)	
@@ -117,6 +131,7 @@ endif
 ifneq (, $(findstring g++, $(CXX_BACKEND))) # if using any version of g++
 	CXXFLAGS = -g -std=c++0x
 	LDFLAGS = -lm
+	TETGENFLAG = -Wno-unused-but-set-variable -Wno-int-to-pointer-cast
 
 	ifeq ($(opt), 1)
 		CXXFLAGS += -O1
@@ -129,8 +144,8 @@ ifneq (, $(findstring g++, $(CXX_BACKEND))) # if using any version of g++
 	endif
 
 	ifeq ($(openmp), 1)
-		CXXFLAGS += -fopenmp -DUSE_OMP
-		LDFLAGS += -fopenmp
+		CXXFLAGS += -fopenmp
+		LDFLAGS += -fopenmp # -Wl,-rpath=/lib64
 	endif
 
 	ifeq ($(useadapt), 1)
@@ -154,7 +169,7 @@ else ifneq (, $(findstring icpc, $(CXX_BACKEND))) # if using intel compiler, tes
 	endif
 
 	ifeq ($(openmp), 1)
-		CXXFLAGS += -fopenmp -DUSE_OMP
+		CXXFLAGS += -fopenmp
 		LDFLAGS += -fopenmp
 	endif
 
@@ -163,7 +178,31 @@ else ifneq (, $(findstring icpc, $(CXX_BACKEND))) # if using intel compiler, tes
 			CXXFLAGS += -I$(VTK_INCLUDE)
 		endif
 	endif
+else ifneq (, $(findstring nvc++, $(CXX)))
+	CXXFLAGS = -mno-fma -DNVCPP
+	LDFLAGS =
+	TETGENFLAGS = 
 
+	ifeq ($(opt), 1)
+		CXXFLAGS += -O1
+	else ifeq ($(opt), 2)
+		CXXFLAGS += -O2
+	endif
+
+	ifeq ($(openacc), 1)
+		CXXFLAGS += -acc=gpu -gpu=managed,nofma -Mcuda -DACC
+		LDFLAGS += -acc=gpu -gpu=managed -Mcuda
+	endif
+
+	ifeq ($(openmp), 1)
+		CXXFLAGS += -fopenmp
+		LDFLAGS += -fopenmp
+	endif
+
+	ifeq ($(nprof), 1)
+		CXXFLAGS += -Minfo=mp,accel -I$(CUDA_DIR)/include -DUSE_NPROF
+		LDFLAGS += -L$(CUDA_DIR)/lib64 -Wl,-rpath,$(CUDA_DIR)/lib64 -lnvToolsExt -g
+	endif
 else
 # the only way to display the error message in Makefile ...
 all:
@@ -253,7 +292,7 @@ ifeq ($(usemmg), 1)
 	CXXFLAGS += $(MMG_CXXFLAGS)
 	LDFLAGS += $(MMG_LDFLAGS)
 endif
-CXXFLAGS += -I/home/rclam/projects/inverse_trials/eigen-3.4.0
+
 C3X3_DIR = 3x3-C
 C3X3_LIBNAME = 3x3
 
@@ -275,7 +314,7 @@ endif
 
 .PHONY: all clean take-snapshot
 
-all: $(EXE) take-snapshot
+all: $(EXE) tetgen/tetgen triangle/triangle take-snapshot
 
 ifeq ($(useadapt), 1)
 
@@ -367,6 +406,9 @@ $(TRI_OBJS): %.o : %.c $(TRI_INCS)
 	@# Triangle cannot be compiled with -O2
 	$(CXX) $(CXXFLAGS) -O1 -DTRILIBRARY -DREDUCED -DANSI_DECLARATORS -c $< -o $@
 
+triangle/triangle: triangle/triangle.c
+	$(CXX) $(CXXFLAGS) -O1 -DREDUCED -DANSI_DECLARATORS triangle/triangle.c -o $@
+
 tetgen/predicates.o: tetgen/predicates.cxx $(TET_INCS)
 	@# Compiling J. Shewchuk predicates, should always be
 	@# equal to -O0 (no optimization). Otherwise, TetGen may not
@@ -374,10 +416,13 @@ tetgen/predicates.o: tetgen/predicates.cxx $(TET_INCS)
 	$(CXX) $(CXXFLAGS) -DTETLIBRARY -O0 -c $< -o $@
 
 tetgen/tetgen.o: tetgen/tetgen.cxx $(TET_INCS)
-	$(CXX) $(CXXFLAGS) -DNDEBUG -DTETLIBRARY -Wno-unused-but-set-variable -Wno-int-to-pointer-cast -c $< -o $@
+	$(CXX) $(CXXFLAGS) -DNDEBUG -DTETLIBRARY $(TETGENFLAG) -c $< -o $@
+
+tetgen/tetgen: tetgen/predicates.cxx tetgen/tetgen.cxx
+	$(CXX) $(CXXFLAGS) -O0 -DNDEBUG $(TETGENFLAG) tetgen/predicates.cxx tetgen/tetgen.cxx -o $@
 
 $(C3X3_DIR)/lib$(C3X3_LIBNAME).a:
-	@+$(MAKE) -C $(C3X3_DIR)
+	@+$(MAKE) -C $(C3X3_DIR) openacc=$(openacc) CUDA_DIR=$(CUDA_DIR)
 
 $(ANN_DIR)/lib/lib$(ANN_LIBNAME).a:
 	@+$(MAKE) -C $(ANN_DIR) linux-g++
