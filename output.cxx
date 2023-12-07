@@ -4,12 +4,6 @@
 #include <iterator>  // For std::distance
 #include <iostream>
 
-#ifdef USE_OMP
-#include <omp.h>
-#else
-#include <ctime>
-#endif
-
 #include "constants.hpp"
 #include "parameters.hpp"
 #include "binaryio.hpp"
@@ -17,6 +11,7 @@
 #include "markerset.hpp"
 #include "matprops.hpp"
 #include "output.hpp"
+#include "utils.hpp"
 
 #ifdef WIN32
 #ifdef _MSC_VER
@@ -42,11 +37,7 @@ Output::~Output()
 
 void Output::write_info(const Variables& var, double dt)
 {
-#ifdef USE_OMP
-    double run_time = omp_get_wtime() - start_time;
-#else
-    double run_time = double(std::clock()) / CLOCKS_PER_SEC;
-#endif
+    double run_time = (get_nanoseconds() - start_time) * 1e-9;
 
     char buffer[256];
     std::snprintf(buffer, 255, "%6d\t%10d\t%12.6e\t%12.4e\t%12.6e\t%8d\t%8d\t%8d\n",
@@ -134,14 +125,18 @@ void Output::_write(const Variables& var, bool disable_averaging)
 
     bin.write_array(*var.strain, "strain", var.strain->size());
     bin.write_array(*var.stress, "stress", var.stress->size());
+    bin.write_array(*var.emt_iso_stress, "emt_iso_stress", var.emt_iso_stress->size());
 
     if (!disable_averaging && is_averaged) {
         double *s = stress_avg.data();
+        double *s_iso = emt_iso_stress_avg.data();
         double tmp = 1.0 / (average_interval + 1);
         for (int i=0; i<stress_avg.num_elements(); ++i) {
             s[i] *= tmp;
+            s_iso[i] *= tmp;
         }
         bin.write_array(stress_avg, "stress averaged", stress_avg.size());
+        bin.write_array(emt_iso_stress_avg, "emt_iso_stress averaged", emt_iso_stress_avg.size());
     }
 
     double_vec tmp(var.nelem);
@@ -184,10 +179,14 @@ void Output::_write(const Variables& var, bool disable_averaging)
     }
 
     bin.close();
+    int64_t duration_ns = get_nanoseconds() - start_time;
     std::cout << "  Output # " << frame
               << ", step = " << var.steps
               << ", time = " << var.time / YEAR2SEC << " yr"
-              << ", dt = " << dt / YEAR2SEC << " yr.\n";
+              << ", dt = " << dt / YEAR2SEC << " yr"
+              << ", wt = ";
+    print_time_ns(duration_ns);
+    std::cout << "\n";
 
     frame ++;
 
@@ -241,10 +240,14 @@ void Output::average_fields(Variables& var)
         std::copy(var.strain->begin(), var.strain->end(), strain0.begin());
 
         if (stress_avg.size() != var.stress->size()) {
-            double *tmp = new double[(var.stress)->num_elements()];
+            double *tmp = new double[(var.stress)->num_elements()];            
+            //double *tmp = new double[(var.emt_iso_stress)->num_elements()];
+            emt_iso_stress_avg.reset(tmp, var.emt_iso_stress->size());
             stress_avg.reset(tmp, var.stress->size());
+
         }
         std::copy(var.stress->begin(), var.stress->end(), stress_avg.begin());
+        std::copy(var.emt_iso_stress->begin(), var.emt_iso_stress->end(), emt_iso_stress_avg.begin());
 
         delta_plstrain_avg = *var.delta_plstrain;
     }
@@ -252,9 +255,12 @@ void Output::average_fields(Variables& var)
         // Averaging stress & plastic strain
         // (PS: dt-weighted average would be better, but difficult to do)
         double *s_avg = stress_avg.data();
+        double *s_iso_avg = emt_iso_stress_avg.data();
         const double *s = var.stress->data();
+        const double *s_iso = var.emt_iso_stress->data();
         for (int i=0; i<stress_avg.num_elements(); ++i) {
             s_avg[i] += s[i];
+            s_iso_avg[i] += s_iso[i];
         }
         for (std::size_t i=0; i<delta_plstrain_avg.size(); ++i) {
             delta_plstrain_avg[i] += (*var.delta_plstrain)[i];

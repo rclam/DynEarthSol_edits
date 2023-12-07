@@ -18,6 +18,7 @@ private:
     array_t coord0;
     tensor_t strain0;
     tensor_t stress_avg;
+    tensor_t emt_iso_stress_avg;
     double_vec delta_plstrain_avg;
 
     void write_info(const Variables& var, double dt);

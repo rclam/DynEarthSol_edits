@@ -464,9 +464,7 @@ void apply_vbcs(const Param &param, const Variables &var, array_t &vel)
                 v[NDIMS-1] = 0; //bc.vbc_val_z0;
                 break;
             case 4:
-                //v[0] = std::min(bc.vbc_val_z0, ((2.0*(*var.coord)[i][0])/param.mesh.xlength-1) * bc.vbc_val_z0);
                 v[0] = std::min(bc.vbc_val_z0, ((2.0*(*var.coord)[i][0])/param.mesh.xlength-1) * bc.vbc_val_z0);
-                //v[0] = std::max(-bc.vbc_val_z0, v[0]);
                 v[0] = std::max(-bc.vbc_val_z0, v[0]);
                 v[NDIMS-1] = 0.0;
                 break;

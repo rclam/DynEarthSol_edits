@@ -293,6 +293,11 @@ namespace {
         delete var.stress;
         var.stress = b;
 
+        b = new tensor_t(e);
+        inject_field(idx, is_changed, elems_vec, ratios_vec, *var.emt_iso_stress, *b);
+        delete var.emt_iso_stress;
+        var.emt_iso_stress = b;
+
         a = new double_vec(e);
         inject_field(idx, is_changed, elems_vec, ratios_vec, *var.stressyy, *a);
         delete var.stressyy;

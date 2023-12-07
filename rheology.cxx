@@ -1,4 +1,3 @@
-#define _USE_MATH_DEFINES
 #include <cmath>
 #include <iostream>
 
@@ -9,20 +8,11 @@
 #include "matprops.hpp"
 #include "rheology.hpp"
 #include "utils.hpp"
+
+#include "ic.hpp"
 #include <Eigen/Dense>
 using Eigen::MatrixXd;
 using Eigen::VectorXd;
-
-
-#include "ic.hpp"
-//To calculate elapsed time and write it down to an external file.
-#include <iomanip>      // std::setw
-#include <chrono>
-#include <fstream>
-using namespace std::chrono;
-//
-#include "fields.hpp"
-
 
 
 static void principal_stresses3(const double* s, double p[3], double v[3][3])
@@ -124,29 +114,20 @@ static void elastic(double bulkm, double shearm, const double* de, double* s)
     double dev = trace(de);
 
     for (int i=0; i<NDIMS; ++i)
-        s[i] += 2 * shearm * de[i] + lambda * dev; //- P_fl !! 
+        s[i] += 2 * shearm * de[i] + lambda * dev;
     for (int i=NDIMS; i<NSTR; ++i)
         s[i] += 2 * shearm * de[i];
 }
 
-static void emt_elastic(double bulkm, double shearm, const double* a_n, double emt_rho, const double* de, double* s, double pf_z, double* s_iso) 
-// TO DO: hydrostatic pore fluid pressure optional in cfg file
-{    
+static void emt_elastic(double bulkm, double shearm,
+                         double emt_rho, double emt_pf, const double* de,
+                         double* s, double* s_iso, const double* a_n)
+{
     /* increment the stress s according to the incremental strain de */
     double lambda = bulkm - 2. /3 * shearm;
     double dev = trace(de);
     double E0 = shearm * ((3*lambda + 2*shearm)/(lambda + shearm)); // Young's Mod
-    double v = lambda / (2*(lambda + shearm));          // poisson ratio
-
-    // intact rock stiffness c_i
-    /*MatrixXd c_i(6,6);
-        c_i <<
-        lambda + 2*shearm, lambda, lambda, 0.0, 0.0, 0.0,
-        lambda, lambda + 2*shearm, lambda, 0.0, 0.0, 0.0,
-        lambda, lambda, lambda + 2*shearm, 0.0, 0.0, 0.0,
-        0.0, 0.0, 0.0, shearm, 0.0, 0.0,
-        0.0, 0.0, 0.0, 0.0, shearm, 0.0,
-        0.0, 0.0, 0.0, 0.0, 0.0, shearm;*/
+    double v = lambda / (2*(lambda + shearm));                      // poisson ratio
 
     // ============ intact compliance S_i ==========================================
     MatrixXd S_i{
@@ -157,11 +138,8 @@ static void emt_elastic(double bulkm, double shearm, const double* a_n, double e
         {0.0, 0.0, 0.0, 0.0, 1/shearm, 0.0},
         {0.0, 0.0, 0.0, 0.0, 0.0, 1/shearm}
     };
-
-    // ================================================================
-
-
-    //double th_rad = ((90-theta_normal)+90)*(M_PI/180); // degree in radian, Use cmath PI
+    // ============ Crack parameters ==========================================
+    //double th_rad = ((90-theta_normal)+90)*(M_PI/180); // degree in radian, Uses cmath PI
     //double a_n[3] = {cos(th_rad), sin(th_rad), 0.0};
     // crack density tensor alpha
     double a_alpha[3][3] = {
@@ -170,24 +148,15 @@ static void emt_elastic(double bulkm, double shearm, const double* a_n, double e
         {0.0,0.0,0.0}
         };
     // ============ Solving Alpha Tensor ==========================================
-    //auto beg4 = high_resolution_clock::now();
     for (int i=0; i<3; i++){
         for (int j=0; j<3; j++){
-            a_alpha[i][j] = emt_rho*a_n[i]*a_n[j]; //tensor product of normal tensor
+            a_alpha[i][j] = emt_rho*a_n[i]*a_n[j]; //tensor product of crack normal tensor
         }
     }
 
-    //for (int i=0; i<3; i++){
-    //    std::cout << std::setprecision (15) << a_n[i] << std::endl; // << " \n";
-    //}
-
-    // ================================================================
-
-
+    // ============ Compliance Correction term  ==========================================
     // correction term (S_voigt): delta_s_a * delta_s_b
     double delta_s_a = (8.0*(1.0-pow(v,2)))/(3.0*E0*(2.0-v));
-    // ============ Solving Correction term partial ==========================================
-    //auto beg5 = high_resolution_clock::now();
     MatrixXd delta_s_b{
         {4*a_alpha[0][0], 0.0, 0.0, 0.0, 2*a_alpha[0][2], 2*a_alpha[0][1]}, 
         {0.0, 4*a_alpha[1][1], 0.0, 2*a_alpha[1][2], 0.0, 2*a_alpha[1][0]}, 
@@ -195,22 +164,21 @@ static void emt_elastic(double bulkm, double shearm, const double* a_n, double e
         {0.0, 2*a_alpha[2][1], 2*a_alpha[1][2], a_alpha[1][1] + a_alpha[2][2], a_alpha[1][0], a_alpha[2][0]}, 
         {2*a_alpha[2][0], 0.0, 2*a_alpha[0][2], a_alpha[0][1], a_alpha[0][0] + a_alpha[2][2], a_alpha[2][1]}, 
         {2*a_alpha[1][0], 2*a_alpha[0][1], 0.0, a_alpha[0][2], a_alpha[1][2], a_alpha[0][0]+a_alpha[1][1]}
-};
+    };
 
-    // ============ Solving S_voigt ==========================================
     //correction term
     MatrixXd S_voigt(6,6);
     S_voigt << delta_s_a * delta_s_b;
 
     // ============ Solving S_e ==========================================
+    // New Cracked Compliance S_e
     MatrixXd S_e(6,6);
     S_e << S_i + S_voigt;
 
+    // ============ Solving c_e ==========================================
     // New Cracked Stiffness c_e
-    // ============ Solving S_e's inverse ==========================================
     MatrixXd c_e(6,6);
     c_e << S_e.inverse();
- 
 
     MatrixXd S_klmm{
         {S_i(0,0)+S_i(0,1)+S_i(0,2), S_i(5,0)+S_i(5,1)+S_i(5,2), S_i(4,0)+S_i(4,1)+S_i(4,2)},
@@ -227,11 +195,10 @@ static void emt_elastic(double bulkm, double shearm, const double* a_n, double e
     S_klmm_V(5) = S_klmm(0,1);
 
     
-    // ============ CS_V calc ==========================================
+    // ============ complianceXstiffness (product) ==========================================
     // dot product CS in voigt
     VectorXd CS_V(6);
     CS_V = c_e*S_klmm_V;
-    // ================================================================
 
     // CS voigt to full
     MatrixXd CS{
@@ -240,7 +207,7 @@ static void emt_elastic(double bulkm, double shearm, const double* a_n, double e
         {CS_V(4), CS_V(3), CS_V(2)}
     };
 
-    // solve for biot tensor
+    // ============ Biot calc ==========================================
     // B_ij = Kronecker - CS
     MatrixXd Kronecker_delta{
         {1.0,0.0,0.0},
@@ -248,21 +215,22 @@ static void emt_elastic(double bulkm, double shearm, const double* a_n, double e
         {0.0,0.0,1.0}
     };
 
-    // ============ Biot calc ==========================================
     MatrixXd Biot(3,3);
-    Biot << Kronecker_delta - CS;
-
-    // ================================================================
+    //Biot << Kronecker_delta - CS;
+    if(emt_rho == 0)
+        Biot << Kronecker_delta;
+    else
+        Biot << Kronecker_delta - CS;
 
     // ============ stress_corr[i][j] ==========================================
-    // mult. B w (neg) P_fl = stress correction term. Convert to voigt and add to s[i] AFTER last s[i] math
     MatrixXd stress_corr(3,3);
-    stress_corr = -pf_z * Biot;
+    stress_corr = emt_pf * Biot;
+
+
+    //       [s0 s3 s4]
+    //   S = [s3 s1 s5]
+    //       [s4 s5 s2]
     
-    //     [s0 s3 s4]
-    //   S=[s3 s1 s5]
-    //     [s4 s5 s2]
-    //
     double stress_corr_V[NSTR] = {0.0};
     for (int i = 0; i < NDIMS; i++)
         stress_corr_V[i] = stress_corr(i,i);
@@ -274,39 +242,30 @@ static void emt_elastic(double bulkm, double shearm, const double* a_n, double e
         stress_corr_V[3] = stress_corr(0,1);
     }
 
-// add correcting term to current intact stress (in voigt notation) to get effective stress
-    // ============ incremental stress update ==========================================
-    //auto beg14 = high_resolution_clock::now();
-    //double strain_12_iso{}; // USED in simple shear benchmark to check s.strains
-
     for (int i=0; i<NDIMS; ++i){
-        //std::cout << "\n i = " << i <<" diagonal: pre\n" << " s[i]: " << s[i] << " \n";
-        //std::cout << " s_iso: " << s_iso[i] << " \n";
-        //std::cout << " stress_corr[i]: " << stress_corr_V[i] << " \n";
+        /*std::cout << "\n i = " << i <<" diagonal: pre\n" << " s[i]: " << s[i] << " \n";
+        std::cout << " s_iso: " << s_iso[i] << " \n";
+        std::cout << " stress_corr[i]: " << stress_corr_V[i] << " \n";
+        */
         s_iso[i] += 2 * shearm * de[i] + lambda * dev;
-        s[i] = s_iso[i] + stress_corr_V[i]; //
-        //std::cout << " diagonal: post s_iso: " << s_iso[i] << " \n";
-        //std::cout << "diagonal: updated normal stress \n"   << s[i] << " \n";
-        //std::cout << s[i] << std::endl;// << " \n";
-        
+        s[i] = s_iso[i] - stress_corr_V[i];
+        /*std::cout << " diagonal: post s_iso: " << s_iso[i] << " \n";
+        std::cout << "diagonal: updated normal stress \n"   << s[i] << " \n";
+        std::cout << s[i] << std::endl;// << " \n";
+        */
     }
+     
     for (int i=NDIMS; i<NSTR; ++i){
         //std::cout << "\n\noff diagonal: pre\n"   << s[i] << " \n";
         s_iso[i] += 2 * shearm * de[i];
-        //strain_12_iso = 0.5 * s_iso[i] / shearm;
-        s[i] = s_iso[i] + stress_corr_V[i]; //isotropic, linear elastic stress update. Correction term should be added to this
-        //std::cout << "off diagonal: updated shear stress\n" << s[i] << " \n";
-        //std::cout << s[i] << std::endl;;// << " \n";
-        //std::cout << "strain[0][1]\n" << strain_12_iso << " \n";
-        //std::cout << strain_12_iso << " \n";
-        //std::cout << "\n=============== END SECTION\n";
-
+        s[i] = s_iso[i] - stress_corr_V[i];
+        /*std::cout << "off diagonal: updated shear stress\n" << s[i] << " \n";
+        std::cout << s[i] << std::endl;;// << " \n";
+        std::cout << "\n=============== END SECTION\n";
+        */
     }
 
-
-
-
-    
+        
 }
 
 
@@ -387,8 +346,6 @@ static void elasto_plastic(double bulkm, double shearm,
         return;
     }
 
-
-
     // yield, shear or tensile?
     double pa = std::sqrt(1 + anphi*anphi) + anphi;
     double ps = ten_max * anphi - amc;
@@ -495,11 +452,11 @@ static void elasto_plastic(double bulkm, double shearm,
     }
 }
 
-static void emt(double bulkm, double shearm, const double* a_n, double emt_rho,
+static void emt_elasto_plastic(double bulkm, double shearm, double emt_rho, double emt_pf,
                            double amc, double anphi, double anpsi,
                            double hardn, double ten_max,
-                           const double* de, double& depls, double* s,
-                           int &failure_mode, double pf_z, double* s_iso)
+                           const double* de, double& depls, double* s, double* s_iso,
+                           int &failure_mode, const double* a_n)
 {
     /* Elasto-plasticity (Mohr-Coulomb criterion)
      *
@@ -510,7 +467,7 @@ static void emt(double bulkm, double shearm, const double* a_n, double emt_rho,
      */
 
     // elastic trial stress
-    emt_elastic(bulkm, shearm, a_n, emt_rho, de, s, pf_z, s_iso); // rename to emt_elastic *** include double P_fl=50e+06
+    emt_elastic(bulkm, shearm, emt_rho, emt_pf, de, s, s_iso, a_n);
     depls = 0;
     failure_mode = 0;
 
@@ -523,11 +480,13 @@ static void emt(double bulkm, double shearm, const double* a_n, double emt_rho,
     // eigenvectors
     double v[3][3];
     principal_stresses3(s, p, v);
+    //principal_stresses3(s_iso, p, v);
 #else
     // In 2D, we only construct the eigenvectors from
     // cos(2*theta) and sin(2*theta) of Mohr circle
     double cos2t, sin2t;
     principal_stresses2(s, p, cos2t, sin2t);
+    //principal_stresses2(s_iso, p, cos2t, sin2t);
 #endif
 
     // composite (shear and tensile) yield criterion
@@ -538,8 +497,6 @@ static void emt(double bulkm, double shearm, const double* a_n, double emt_rho,
         // no failure
         return;
     }
-
-
 
     // yield, shear or tensile?
     double pa = std::sqrt(1 + anphi*anphi) + anphi;
@@ -631,18 +588,29 @@ static void emt(double bulkm, double shearm, const double* a_n, double emt_rho,
                 }
             }
         }
+        s_iso[0] = ss[0][0];
+        s_iso[1] = ss[1][1];
+        s_iso[2] = ss[2][2];
+        s_iso[3] = ss[0][1];
+        s_iso[4] = ss[0][2];
+        s_iso[5] = ss[1][2];
         s[0] = ss[0][0];
         s[1] = ss[1][1];
         s[2] = ss[2][2];
         s[3] = ss[0][1];
         s[4] = ss[0][2];
         s[5] = ss[1][2];
+
 #else
         double dc2 = (p[0] - p[1]) * cos2t;
         double dss = p[0] + p[1];
+        s_iso[0] = 0.5 * (dss + dc2);
+        s_iso[1] = 0.5 * (dss - dc2);
+        s_iso[2] = 0.5 * (p[0] - p[1]) * sin2t;
         s[0] = 0.5 * (dss + dc2);
         s[1] = 0.5 * (dss - dc2);
         s[2] = 0.5 * (p[0] - p[1]) * sin2t;
+
 #endif
     }
 }
@@ -854,25 +822,238 @@ static void elasto_plastic2d(double bulkm, double shearm,
     }
 }
 
+static void emt_elasto_plastic2d(double bulkm, double shearm,
+                             double amc, double anphi, double anpsi,
+                             double hardn, double ten_max,
+                             const double* de, double& depls,
+                             double* s, double* s_iso, double &syy,
+                             int &failure_mode)
+{
+    /* Elasto-plasticity (Mohr-Coulomb criterion) */
 
-void update_stress(const Variables& var, tensor_t& stress,
+    /* This function is derived from geoFLAC.
+     * The original code in geoFLAC assumes 2D plane strain formulation,
+     * i.e. there are 3 principal stresses (PSs) and only 2 principal strains
+     * (Strain_yy, Strain_xy, and Strain_yz all must be 0).
+     * Here, the code is adopted to pure 2D or 3D plane strain.
+     *
+     * failure_mode --
+     *   0: no failure
+     *   1: tensile failure, all PSs exceed tensile limit
+     *   2: tensile failure, 2 PSs exceed tensile limit
+     *   3: tensile failure, 1 PS exceeds tensile limit
+     *  10: pure shear failure
+     *  11, 12, 13: tensile + shear failure
+     *  20, 21, 22, 23: shear + tensile failure
+     */
+
+    depls = 0;
+    failure_mode = 0;
+
+    // elastic trial stress
+    double a1 = bulkm + 4. / 3 * shearm;
+    double a2 = bulkm - 2. / 3 * shearm;
+    double sxx = s[0] + de[1]*a2 + de[0]*a1;
+    double szz = s[1] + de[0]*a2 + de[1]*a1;
+    double sxz = s[2] + de[2]*2*shearm;
+    syy += (de[0] + de[1]) * a2; // Stress YY component, plane strain
+
+
+    //
+    // transform to principal stress coordinate system
+    //
+    // eigenvalues (principal stresses)
+    double p[3];
+
+    // In 2D, we only construct the eigenvectors from
+    // cos(2*theta) and sin(2*theta) of Mohr circle
+    double cos2t, sin2t;
+    int n1, n2, n3;
+
+    {
+        // center and radius of Mohr circle
+        double s0 = 0.5 * (sxx + szz);
+        double rad = 0.5 * std::sqrt((sxx-szz)*(sxx-szz) + 4*sxz*sxz);
+
+        // principal stresses in the X-Z plane
+        double si = s0 - rad;
+        double sii = s0 + rad;
+
+        // direction cosine and sine of 2*theta
+        const double eps = 1e-15;
+        if (rad > eps) {
+            cos2t = 0.5 * (szz - sxx) / rad;
+            sin2t = -sxz / rad;
+        }
+        else {
+            cos2t = 1;
+            sin2t = 0;
+        }
+
+        // sort p.s.
+#if 1
+        //
+        // 3d plane strain
+        //
+        if (syy > sii) {
+            // syy is minor p.s.
+            n1 = 0;
+            n2 = 1;
+            n3 = 2;
+            p[0] = si;
+            p[1] = sii;
+            p[2] = syy;
+        }
+        else if (syy < si) {
+            // syy is major p.s.
+            n1 = 1;
+            n2 = 2;
+            n3 = 0;
+            p[0] = syy;
+            p[1] = si;
+            p[2] = sii;
+        }
+        else {
+            // syy is intermediate
+            n1 = 0;
+            n2 = 2;
+            n3 = 1;
+            p[0] = si;
+            p[1] = syy;
+            p[2] = sii;
+        }
+#else
+        /* XXX: This case gives unreasonable result. Don't know why... */
+        //
+        // pure 2d case
+        //
+        n1 = 0;
+        n2 = 2;
+        p[0] = si;
+        p[1] = syy;
+        p[2] = sii;
+#endif
+    }
+
+    // Possible tensile failure scenarios
+    // 1. S1 (least tensional or greatest compressional principal stress) > ten_max:
+    //    all three principal stresses must be greater than ten_max.
+    //    Assign ten_max to all three and don't do anything further.
+    if( p[0] >= ten_max ) {
+        s[0] = s[1] = syy = ten_max;
+        s[2] = 0.0;
+        s_iso[0] = s_iso[1] = syy = ten_max;
+        s_iso[2] = 0.0;
+        failure_mode = 1;
+        return;
+    }
+
+    // 2. S2 (intermediate principal stress) > ten_max:
+    //    S2 and S3 must be greater than ten_max.
+    //    Assign ten_max to these two and continue to the shear failure block.
+    if( p[1] >= ten_max ) {
+        p[1] = p[2] = ten_max;
+        failure_mode = 2;
+    }
+
+    // 3. S3 (most tensional or least compressional principal stress) > ten_max:
+    //    Only this must be greater than ten_max.
+    //    Assign ten_max to S3 and continue to the shear failure block.
+    else if( p[2] >= ten_max ) {
+        p[2] = ten_max;
+        failure_mode = 3;
+    }
+
+
+    // shear yield criterion
+    double fs = p[0] - p[2] * anphi + amc;
+    if (fs >= 0.0) {
+        // Tensile failure case S2 or S3 could have happened!!
+        // XXX: Need to rationalize why exit without doing anything further.
+        s[0] = sxx;
+        s[1] = szz;
+        s[2] = sxz;
+        s_iso[0] = sxx;
+        s_iso[1] = szz;
+        s_iso[2] = sxz;
+        return;
+    }
+
+    failure_mode += 10;
+
+    // shear failure
+    const double alams = fs / (a1 - a2*anpsi + a1*anphi*anpsi - a2*anphi + hardn);
+    p[0] -= alams * (a1 - a2 * anpsi);
+    p[1] -= alams * (a2 - a2 * anpsi);
+    p[2] -= alams * (a2 - a1 * anpsi);
+
+    // 2nd invariant of plastic strain
+    depls = 0.5 * std::fabs(alams + alams * anpsi);
+
+    //***********************************
+    // The following seems redundant but... this is how it goes in geoFLAC.
+    //
+    // Possible tensile failure scenarios
+    // 1. S1 (least tensional or greatest compressional principal stress) > ten_max:
+    //    all three principal stresses must be greater than ten_max.
+    //    Assign ten_max to all three and don't do anything further.
+    if( p[0] >= ten_max ) {
+        s[0] = s[1] = syy = ten_max;
+        s[2] = 0.0;
+        s_iso[0] = s_iso[1] = syy = ten_max;
+        s_iso[2] = 0.0;
+        failure_mode += 20;
+        return;
+    }
+
+    // 2. S2 (intermediate principal stress) > ten_max:
+    //    S2 and S3 must be greater than ten_max.
+    //    Assign ten_max to these two and continue to the shear failure block.
+    if( p[1] >= ten_max ) {
+        p[1] = p[2] = ten_max;
+        failure_mode += 20;
+    }
+
+    // 3. S3 (most tensional or least compressional principal stress) > ten_max:
+    //    Only this must be greater than ten_max.
+    //    Assign ten_max to S3 and continue to the shear failure block.
+    else if( p[2] >= ten_max ) {
+        p[2] = ten_max;
+        failure_mode += 20;
+    }
+    //***********************************
+
+
+    // rotate the principal stresses back to global axes
+    {
+        double dc2 = (p[n1] - p[n2]) * cos2t;
+        double dss = p[n1] + p[n2];
+        s[0] = 0.5 * (dss + dc2);
+        s[1] = 0.5 * (dss - dc2);
+        s[2] = 0.5 * (p[n1] - p[n2]) * sin2t;
+        s_iso[0] = 0.5 * (dss + dc2);
+        s_iso[1] = 0.5 * (dss - dc2);
+        s_iso[2] = 0.5 * (p[n1] - p[n2]) * sin2t;
+        syy = p[n3];
+    }
+}
+
+void update_stress(const Variables& var, tensor_t& stress, tensor_t& emt_iso_stress,
                    double_vec& stressyy, double_vec& dpressure,
                    tensor_t& strain, double_vec& plstrain,
-                   double_vec& delta_plstrain, tensor_t& strain_rate, tensor_t& emt_normal_array, tensor_t& emt_iso_stress)
+                   double_vec& delta_plstrain, tensor_t& strain_rate, tensor_t& emt_normal_array)
 {
-    const int rheol_type = var.mat->rheol_type;
 
     #pragma omp parallel for default(none)                           \
-        shared(var, stress, stressyy, dpressure, strain, plstrain, delta_plstrain, \
-               strain_rate, rheol_type, emt_normal_array, emt_iso_stress, std::cerr)
+        shared(var, stress, emt_iso_stress, stressyy, dpressure, strain, plstrain, delta_plstrain, \
+               strain_rate, emt_normal_array, std::cerr)
     for (int e=0; e<var.nelem; ++e) {
         // stress, strain and strain_rate of this element
         double* s = stress[e];
-        double* s_iso = emt_iso_stress[e];  // new
+        double* s_iso = emt_iso_stress[e];
         double& syy = stressyy[e];
         double* es = strain[e];
         double* edot = strain_rate[e];
-        
 	double old_s = trace(s);
 
         // anti-mesh locking correction on strain rate
@@ -886,14 +1067,7 @@ void update_stress(const Variables& var, tensor_t& stress,
 
         // update strain with strain rate
         for (int i=0; i<NSTR; ++i) {
-            //std::cerr << "\n element="<<e<<" i="<<i<<" es[i]: " << es[i] << "\n";
             es[i] += edot[i] * var.dt;
-            /*std::cerr << "es[i]: " << es[i] <<" de="<< edot[i]*var.dt<< "\n";
-            std::cerr << " edot[i]: " << edot[i] << "\n";*/
-            /*std::cerr << " dt[i]: " << var.dt << "\n";
-            std::cerr << " a_n[i]: " << emt_normal_array[e][i] << "\n";
-            std::cerr << "\n";*/
-
         }
 
         // modified strain increment
@@ -902,7 +1076,7 @@ void update_stress(const Variables& var, tensor_t& stress,
             de[i] = edot[i] * var.dt;
         }
 
-        switch (rheol_type) {
+        switch (var.mat->rheol_type) {
         case MatProps::rh_elastic:
             {
                 double bulkm = var.mat->bulkm(e);
@@ -950,48 +1124,24 @@ void update_stress(const Variables& var, tensor_t& stress,
             break;
         case MatProps::rh_emt:
             {
-                double* a_n = emt_normal_array[e];  //new!!
+                double* a_n = emt_normal_array[e];
                 double depls = 0;
                 double bulkm = var.mat->bulkm(e);
                 double shearm = var.mat->shearm(e);
                 double emt_rho = var.mat->emt_rho(e);
+                double emt_pf = var.mat->emt_pf_z(e);
                 double amc, anphi, anpsi, hardn, ten_max;
                 var.mat->plastic_props(e, plstrain[e],
                                        amc, anphi, anpsi, hardn, ten_max);
                 int failure_mode;
                 double pf_z = pore_fluid_pressure(var, e);
-                
-                /*if (var.mat->emt_rho(e)==0.0 && var.mat->is_plane_strain) {
-                    // use ep when no imposed cracks
-                    elasto_plastic2d(bulkm, shearm, amc, anphi, anpsi, hardn, ten_max,
-                                     de, depls, s, syy, failure_mode);
-                }
-                else if (var.mat->emt_rho(e)==0.0)  {
-                    elasto_plastic(bulkm, shearm, amc, anphi, anpsi, hardn, ten_max,
-                                   de, depls, s, failure_mode);
-                }
-                else if (var.mat->emt_rho(e)!=0.0 && var.mat->is_plane_strain) {
-                    // use emt when cracks imposed
-                    emt(bulkm, shearm, a_n, emt_rho, amc, anphi, anpsi, hardn, ten_max,
-                                   de, depls, s, failure_mode, pf_z, s_iso);
-                }
-                else if (var.mat->emt_rho(e)!=0.0 && var.mat->is_plane_strain) {
-                    // use emt when cracks imposed
-                    emt(bulkm, shearm, a_n, emt_rho, amc, anphi, anpsi, hardn, ten_max,
-                                   de, depls, s, failure_mode, pf_z, s_iso);
-                }
-                else {
-                    emt(bulkm, shearm, a_n, emt_rho, amc, anphi, anpsi, hardn, ten_max,
-                                   de, depls, s, failure_mode, pf_z, s_iso);
-                }*/
                 if (var.mat->is_plane_strain) {
-                    // use emt when cracks imposed
-                    emt(bulkm, shearm, a_n, emt_rho, amc, anphi, anpsi, hardn, ten_max,
-                                   de, depls, s, failure_mode, pf_z, s_iso);
+                    emt_elasto_plastic2d(bulkm, shearm, amc, anphi, anpsi, hardn, ten_max,
+                                     de, depls, s, s_iso, syy, failure_mode);
                 }
                 else {
-                    emt(bulkm, shearm, a_n, emt_rho, amc, anphi, anpsi, hardn, ten_max,
-                                   de, depls, s, failure_mode, pf_z, s_iso);
+                    emt_elasto_plastic(bulkm, shearm, emt_rho, emt_pf, amc, anphi, anpsi, hardn, ten_max,
+                                   de, depls, s, s_iso, failure_mode, a_n);
                 }
                 plstrain[e] += depls;
                 delta_plstrain[e] = depls;
@@ -1040,13 +1190,13 @@ void update_stress(const Variables& var, tensor_t& stress,
             }
             break;
         default:
-            std::cerr << "Error: unknown rheology type: " << rheol_type << "\n";
+            std::cerr << "Error: unknown rheology type: " << var.mat->rheol_type << "\n";
             std::exit(1);
             break;
         }
 	dpressure[e] = trace(s) - old_s;
-        //std::cerr << "stress " << e << ": ";
-        //print(std::cerr, s, NSTR);
-        //std::cerr << '\n';
+        // std::cerr << "stress " << e << ": ";
+        // print(std::cerr, s, NSTR);
+        // std::cerr << '\n';
     }
 }

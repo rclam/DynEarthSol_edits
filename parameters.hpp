@@ -20,6 +20,7 @@ typedef Array2D<double,NDIMS> array_t;
 typedef Array2D<double,NSTR> tensor_t;
 typedef Array2D<double,NODES_PER_ELEM> shapefn;
 typedef Array2D<double,1> regattr_t;
+typedef Array2D<double,NODES_PER_ELEM*3> elem_cache;
 
 typedef Array2D<int,NODES_PER_ELEM> conn_t;
 typedef Array2D<int,NDIMS> segment_t;
@@ -183,6 +184,8 @@ struct Mat {
     // emt (anisotropy-related)
     double_vec initial_crack_normal; //angle of vector normal to crack (meas. from horiz. ax. CCW)
     double_vec emt_crack_density; // for rh_emt
+    double_vec emt_pf; // for rh_emt
+
 
     double_vec visc_exponent;
     double_vec visc_coefficient;
@@ -196,6 +199,12 @@ struct Mat {
     double_vec cohesion0, cohesion1;
     double_vec friction_angle0, friction_angle1;
     double_vec dilation_angle0, dilation_angle1;
+};
+
+struct Time {
+    int64_t remesh_time;
+    int64_t output_time;
+    int64_t start_time;
 };
 
 struct Markers {
@@ -232,6 +241,7 @@ struct Variables {
     double time;
     double dt;
     int steps;
+    Time func_time;
 
     int nnode;
     int nelem;
@@ -256,7 +266,6 @@ struct Variables {
     std::map<std::pair<int,int>, double*> edge_vectors;
 
     int_vec2D *support;
-    int_vec egroups;
 
     double_vec *volume, *volume_old, *volume_n;
     double_vec *mass, *tmass;
@@ -268,6 +277,8 @@ struct Variables {
     array_t *vel, *force, *coord0;
     tensor_t *strain_rate, *strain, *stress, *emt_iso_stress, *emt_normal_array;
     shapefn *shpdx, *shpdy, *shpdz;
+    elem_cache *tmp_result;
+    double_vec *tmp_result_sg;
 
     MatProps *mat;
 
