@@ -9,16 +9,14 @@
 ##
 ## ndims = 3: 3D code; 2: 2D code
 ## opt = 1 ~ 3: optimized build; others: debugging build
-## openacc = 1: enable OpenACC
 ## openmp = 1: enable OpenMP
 ## useadapt = 1: use libadaptivity for mesh optimization during remeshing
 ## adaptive_time_step = 1: use adaptive time stepping technique
 ## use_R_S = 1: use Rate - State friction law
 ## useexo = 1: import a exodusII mesh (e.g., created with Trelis)
 
-ndims = 2
+ndims = 3
 opt = 2
-openacc = 0
 openmp = 1
 useadapt = 0
 usemmg = 0
@@ -50,24 +48,12 @@ ifeq ($(useadapt), 1)
 	#LIB_MPIFORTRAN = -lmpi_mpifh # OpenMPI 1.10.2. Other possibilities: -lmpifort, -lfmpich, -lmpi_f77
 	LIB_MPIFORTRAN = -lfmpich # OpenMPI 1.10.2. Other possibilities: -lmpifort, -lfmpich, -lmpi_f77
 else
-	ifeq ($(openacc), 1)
-		CXX = nvc++
-		openmp = 0 # force no openmp when using openacc
-	else
-		ifeq ($(nprof), 1)
-			CXX = nvc++
-		else
-			CXX = g++
-		endif
-	endif
+	CXX = g++
 	CXX_BACKEND = ${CXX}
 endif
 
-## path to cuda's base directory
-CUDA_DIR = # /cluster/nvidia/hpc_sdk/Linux_x86_64/21.2/cuda
-
 ## path to Boost's base directory, if not in standard system location
-BOOST_ROOT_DIR = /Users/rclam/projects/boost_1_80_0
+BOOST_ROOT_DIR =
 
 ########################################################################
 ## Select compiler and linker flags
@@ -97,10 +83,10 @@ endif
 
 ifeq ($(useexo), 1)
 	# path to exodus header files
-	EXO_INCLUDE = ./seacas/include
+	EXO_INCLUDE = ${HOME}/opt/seacas/include
 
 	# path of exodus library files, if not in standard system location
-	EXO_LIB_DIR = ./seacas/lib
+	EXO_LIB_DIR = ${HOME}/opt/seacas/lib
 
 	EXO_CXXFLAGS = -I$(EXO_INCLUDE) -DUSEEXODUS
 	EXO_LDFLAGS = -L$(EXO_LIB_DIR) -lexodus
@@ -111,10 +97,10 @@ endif
 
 ifeq ($(usemmg), 1)
 	# path to MMG3D header files
-	MMG_INCLUDE = ./mmg/build/include
+	MMG_INCLUDE = ${HOME}/opt/mmg/Release/include
 
 	# path of MMG3D library files, if not in standard system location
-	MMG_LIB_DIR = ./mmg/build/lib
+	MMG_LIB_DIR = ${HOME}/opt/mmg/Release/lib
 
 	MMG_CXXFLAGS = -I$(MMG_INCLUDE) -DUSEMMG
 	ifeq ($(ndims), 3)	
@@ -131,7 +117,6 @@ endif
 ifneq (, $(findstring g++, $(CXX_BACKEND))) # if using any version of g++
 	CXXFLAGS = -g -std=c++0x
 	LDFLAGS = -lm
-	TETGENFLAG = -Wno-unused-but-set-variable -Wno-int-to-pointer-cast
 
 	ifeq ($(opt), 1)
 		CXXFLAGS += -O1
@@ -144,8 +129,8 @@ ifneq (, $(findstring g++, $(CXX_BACKEND))) # if using any version of g++
 	endif
 
 	ifeq ($(openmp), 1)
-		CXXFLAGS += -fopenmp
-		LDFLAGS += -fopenmp # -Wl,-rpath=/lib64
+		CXXFLAGS += -fopenmp -DUSE_OMP
+		LDFLAGS += -fopenmp
 	endif
 
 	ifeq ($(useadapt), 1)
@@ -169,7 +154,7 @@ else ifneq (, $(findstring icpc, $(CXX_BACKEND))) # if using intel compiler, tes
 	endif
 
 	ifeq ($(openmp), 1)
-		CXXFLAGS += -fopenmp
+		CXXFLAGS += -fopenmp -DUSE_OMP
 		LDFLAGS += -fopenmp
 	endif
 
@@ -178,31 +163,7 @@ else ifneq (, $(findstring icpc, $(CXX_BACKEND))) # if using intel compiler, tes
 			CXXFLAGS += -I$(VTK_INCLUDE)
 		endif
 	endif
-else ifneq (, $(findstring nvc++, $(CXX)))
-	CXXFLAGS = -mno-fma -DNVCPP
-	LDFLAGS =
-	TETGENFLAGS = 
 
-	ifeq ($(opt), 1)
-		CXXFLAGS += -O1
-	else ifeq ($(opt), 2)
-		CXXFLAGS += -O2
-	endif
-
-	ifeq ($(openacc), 1)
-		CXXFLAGS += -acc=gpu -gpu=managed,nofma -Mcuda -DACC
-		LDFLAGS += -acc=gpu -gpu=managed -Mcuda
-	endif
-
-	ifeq ($(openmp), 1)
-		CXXFLAGS += -fopenmp
-		LDFLAGS += -fopenmp
-	endif
-
-	ifeq ($(nprof), 1)
-		CXXFLAGS += -Minfo=mp,accel -I$(CUDA_DIR)/include -DUSE_NPROF
-		LDFLAGS += -L$(CUDA_DIR)/lib64 -Wl,-rpath,$(CUDA_DIR)/lib64 -lnvToolsExt -g
-	endif
 else
 # the only way to display the error message in Makefile ...
 all:
@@ -416,13 +377,13 @@ tetgen/predicates.o: tetgen/predicates.cxx $(TET_INCS)
 	$(CXX) $(CXXFLAGS) -DTETLIBRARY -O0 -c $< -o $@
 
 tetgen/tetgen.o: tetgen/tetgen.cxx $(TET_INCS)
-	$(CXX) $(CXXFLAGS) -DNDEBUG -DTETLIBRARY $(TETGENFLAG) -c $< -o $@
+	$(CXX) $(CXXFLAGS) -DNDEBUG -DTETLIBRARY -Wno-unused-but-set-variable -Wno-int-to-pointer-cast -c $< -o $@
 
 tetgen/tetgen: tetgen/predicates.cxx tetgen/tetgen.cxx
-	$(CXX) $(CXXFLAGS) -O0 -DNDEBUG $(TETGENFLAG) tetgen/predicates.cxx tetgen/tetgen.cxx -o $@
+	$(CXX) $(CXXFLAGS) -O0 -DNDEBUG -Wno-unused-but-set-variable -Wno-int-to-pointer-cast tetgen/predicates.cxx tetgen/tetgen.cxx -o $@
 
 $(C3X3_DIR)/lib$(C3X3_LIBNAME).a:
-	@+$(MAKE) -C $(C3X3_DIR) openacc=$(openacc) CUDA_DIR=$(CUDA_DIR)
+	@+$(MAKE) -C $(C3X3_DIR)
 
 $(ANN_DIR)/lib/lib$(ANN_LIBNAME).a:
 	@+$(MAKE) -C $(ANN_DIR) linux-g++
