@@ -25,6 +25,7 @@ Requirement:
   -- In the same directory, run "./b2 --with-program_options -q" to build
      the library.
 * You will need Python 2.6+ or 3.2+ and the Numpy package.
+* To use EMT rheology, you will need to install the Eigen C++ library.
 
 For libadaptiviy, you further need
 * VTK5 (v5.8 and v5.10 tested) or later versions built from source or development packages.
